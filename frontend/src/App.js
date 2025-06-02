@@ -1,5 +1,5 @@
-import logo from './logo.svg';
-import './App.css';
+import logo from "./logo.svg";
+import "./App.css";
 
 function App() {
   return (
@@ -17,6 +17,9 @@ function App() {
         >
           Learn React
         </a>
+        <h1 className="text-3xl font-bold underline">
+          Hello world! (Testing Tailwind)
+        </h1>
       </header>
     </div>
   );
