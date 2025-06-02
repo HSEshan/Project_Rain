@@ -38,10 +38,21 @@ function App() {
         <h1 className="text-3xl font-bold underline">
           Hello world! (Testing Tailwind)
         </h1>
-        <h2>
-          Response from Backend ={" "}
-          {response ? JSON.stringify(response) : "Loading..."}
-        </h2>
+        <div className="max-w-md min-w-[300px] mx-auto my-8 p-6 bg-gradient-to-r from-purple-500 via-pink-500 to-red-500 rounded-2xl shadow-lg transform transition duration-300 hover:scale-105">
+          <h2 className="text-white text-xl font-bold mb-4">
+            Backend Response
+          </h2>
+
+          {response ? (
+            <div className="max-w-[150px] mx-auto bg-white rounded-lg p-1 shadow-inner">
+              <p className="text-gray-700">
+                <span className="font-semibold">Status:</span> {response.status}
+              </p>
+            </div>
+          ) : (
+            <p className="text-white">Loading...</p>
+          )}
+        </div>
       </header>
     </div>
   );
