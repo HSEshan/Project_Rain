@@ -29,7 +29,33 @@
    alembic upgrade head
    ```
 
-6. Start the FastAPI server:
+6. Run tests:
+   ```
+   python -m pytest -vv
+   ```
+7. Start the FastAPI server:
    ```bash
    uvicorn app.main:app --reload
    ```
+
+### Frontend Setup
+
+1. Navigate to the frontend directory:
+
+   ```bash
+   cd frontend
+   ```
+
+2. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+3. Start the React development server:
+
+   ```bash
+   npm start
+   ```
+
+   The frontend will be available at `http://localhost:3000`.
