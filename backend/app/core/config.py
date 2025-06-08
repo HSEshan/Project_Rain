@@ -40,15 +40,19 @@ def get_settings() -> SettingsFactory:
     if not environment:
         print("ENVIRONMENT is not set, defaulting to development")
         os.environ["ENVIRONMENT"] = "development"
+        environment = "development"
     env_file = f"{environment}.env"
 
     # Load .env if exists, but don’t fail if missing
     if Path(env_file).exists():
         env_file_to_load = env_file
+        print(f"Loading {env_file}")
     elif Path(".env").exists():
         env_file_to_load = ".env"
+        print("Loading .env")
     else:
         env_file_to_load = None
+        print(f"No env file loaded")
 
     try:
         return SettingsFactory(_env_file=env_file_to_load, _env_file_encoding="utf-8")
