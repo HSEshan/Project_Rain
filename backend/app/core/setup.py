@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
-# from app.api.v1 import router as api_router
+from app.api.v1 import router as api_router
 from app.core.config import settings
 from app.core.utils import shutdown_event, startup_event
 from fastapi import APIRouter, FastAPI, status
@@ -28,7 +28,7 @@ def read_root():
 def create_app() -> FastAPI:
     app = FastAPI(lifespan=lifespan, log_level="debug")
     app.include_router(health_router)
-    # app.include_router(api_router)
+    app.include_router(api_router)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://localhost:3000"],

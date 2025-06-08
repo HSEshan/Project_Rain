@@ -1,6 +1,6 @@
 ## Project_ZeroTrace
 
-### Backend Setup
+### ⚙️ Backend Setup
 
 1. Navigate to the backend directory:
 
@@ -35,10 +35,10 @@
    ```
 7. Start the FastAPI server:
    ```bash
-   uvicorn app.main:app --reload
+   uvicorn main:app --reload
    ```
 
-### Frontend Setup
+### 🖥 Frontend Setup
 
 1. Navigate to the frontend directory:
 

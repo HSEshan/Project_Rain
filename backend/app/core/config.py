@@ -36,7 +36,10 @@ class SettingsFactory(BaseSettings):
 
 
 def get_settings() -> SettingsFactory:
-    environment = os.getenv("ENVIRONMENT", "development")
+    environment = os.getenv("ENVIRONMENT")
+    if not environment:
+        print("ENVIRONMENT is not set, defaulting to development")
+        os.environ["ENVIRONMENT"] = "development"
     env_file = f"{environment}.env"
 
     # Load .env if exists, but don’t fail if missing
