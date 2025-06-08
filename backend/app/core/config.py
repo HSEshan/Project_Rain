@@ -1,5 +1,6 @@
 import os
 from enum import Enum
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -35,12 +36,21 @@ class SettingsFactory(BaseSettings):
 
 
 def get_settings() -> SettingsFactory:
+    environment = os.getenv("ENVIRONMENT", "development")
+    env_file = f"{environment}.env"
+
+    # Load .env if exists, but don’t fail if missing
+    if Path(env_file).exists():
+        env_file_to_load = env_file
+    elif Path(".env").exists():
+        env_file_to_load = ".env"
+    else:
+        env_file_to_load = None
+
     try:
-        return SettingsFactory(
-            _env_file=f"{os.getenv('ENVIRONMENT')}.env", _env_file_encoding="utf-8"
-        )
+        return SettingsFactory(_env_file=env_file_to_load, _env_file_encoding="utf-8")
     except Exception as e:
-        print(e)
+        print(f"Error loading settings: {e}")
         raise
 
 
