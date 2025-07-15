@@ -22,9 +22,10 @@ jobs:
 
       # Step 2: Install dependencies
       - name: Install dependencies
-        run: |
-          pip install -r requirements.txt
+        working-directory: ./backend
+        run: pip install -r requirements.txt
 
-      # Step 3: Run tests
+      # Step 3: Run Pytest
       - name: Run Pytest
+        working-directory: ./backend
         run: python -m pytest
