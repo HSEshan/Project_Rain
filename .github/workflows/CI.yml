@@ -2,9 +2,10 @@ name: CI/CD Pipeline
 
 on:
   push:
-    branches:
+    branches: #all branches
       - main
-      - develop # Add other branches you want to test
+      - eshan-dev-branch
+      - samir-dev-branch
   pull_request:
     branches:
       - main
