@@ -5,7 +5,7 @@ from src.auth.service import AuthService, auth_service
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
-@router.post("/register", response_model=dict, status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register_user(user: UserCreate, service: AuthService = auth_service):
     return await service.register_user(user)
 
