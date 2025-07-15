@@ -15,9 +15,7 @@ fi
 # Configure runner
 ./config.sh --unattended \
   --url "${REPO_URL}" \
-  --token "${RUNNER_TOKEN}" \
-  --name "${RUNNER_NAME}" \
-  --work "_work" \
+  --token "${RUNNER_TOKEN}"
 
 # Run and remove after exit
 exec ./run.sh
