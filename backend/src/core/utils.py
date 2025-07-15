@@ -1,11 +1,15 @@
 import asyncio
+import logging
+
+logger = logging.getLogger()
 
 
 async def startup_event():
+
     await asyncio.sleep(1)
-    print("Startup Successful")
+    logger.info("Startup Successful")
 
 
 async def shutdown_event():
     await asyncio.sleep(1)
-    print("Shutdown Successful")
+    logger.info("Shutdown Successful")

@@ -1,5 +1,5 @@
-from app.database.core import db_dependency
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.database.core import db_dependency
 
 
 class BaseService:

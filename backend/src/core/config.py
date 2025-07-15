@@ -1,3 +1,4 @@
+import logging
 import os
 from enum import Enum
 from pathlib import Path
@@ -36,28 +37,27 @@ class SettingsFactory(BaseSettings):
 
 
 def get_settings() -> SettingsFactory:
-    environment = os.getenv("ENVIRONMENT")
-    if not environment:
-        print("ENVIRONMENT is not set, defaulting to development")
+    logger = logging.getLogger(__name__)
+    if not os.getenv("ENVIRONMENT"):
+        logger.info("ENVIRONMENT is not set, defaulting to development")
         os.environ["ENVIRONMENT"] = "development"
-        environment = "development"
-    env_file = f"{environment}.env"
+    env_file = f"{os.environ["ENVIRONMENT"]}.env"
 
     # Load .env if exists, but don’t fail if missing
     if Path(env_file).exists():
         env_file_to_load = env_file
-        print(f"Loading {env_file}")
+        logger.info(f"Loading {env_file}")
     elif Path(".env").exists():
         env_file_to_load = ".env"
-        print("Loading .env")
+        logger.info("Loading .env")
     else:
         env_file_to_load = None
-        print(f"No env file loaded")
+        logger.info(f"No env file loaded")
 
     try:
         return SettingsFactory(_env_file=env_file_to_load, _env_file_encoding="utf-8")
     except Exception as e:
-        print(f"Error loading settings: {e}")
+        logger.info(f"Error loading settings: {e}")
         raise
 
 
