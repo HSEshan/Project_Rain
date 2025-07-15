@@ -18,7 +18,6 @@ fi
   --token "${RUNNER_TOKEN}" \
   --name "${RUNNER_NAME}" \
   --work "_work" \
-  --ephemeral
 
 # Run and remove after exit
 exec ./run.sh
