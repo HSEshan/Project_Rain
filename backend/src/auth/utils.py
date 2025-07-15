@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
@@ -14,7 +15,7 @@ oauth2_bearer = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 
 async def create_access_token(
-    id: int, email: str, name: str, expires_delta: timedelta
+    id: int, email: str, name: str, expires_delta: timedelta = timedelta(minutes=30)
 ) -> Token:
     encode = {"sub": email, "id": id, "name": name}
     expire_time = datetime.now(timezone.utc) + expires_delta
@@ -24,7 +25,7 @@ async def create_access_token(
     return Token(access_token=token, token_type="bearer")
 
 
-async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]):
+async def get_current_user(token: Annotated[str, Depends(oauth2_bearer)]) -> dict:
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email = payload.get("sub")
@@ -47,7 +48,7 @@ user_dependency = Annotated[dict, Depends(get_current_user)]
 
 
 def parse_login_method(login: str) -> str:
-    if "@" in login and "." in login:
+    if re.search(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", login):
         return "email"
     else:
         return "username"
