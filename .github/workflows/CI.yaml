@@ -20,6 +20,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # Create testing.env from secret
+      - name: Inject testing.env
+        working-directory: ./backend
+        run: echo "${{ secrets.TESTING_ENV_FILE }}" > testing.env
+
       # Step 2: Install dependencies
       - name: Install dependencies
         working-directory: ./backend
@@ -28,4 +33,6 @@ jobs:
       # Step 3: Run Pytest
       - name: Run Pytest
         working-directory: ./backend
+        env:
+          ENVIRONMENT: testing
         run: python -m pytest
