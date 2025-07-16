@@ -1,0 +1,38 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - eshan-dev-branch
+      - samir-dev-branch
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  ci:
+    name: Pytest
+    runs-on: self-hosted # 👈 Use your Docker runner label
+
+    steps:
+      # Step 1: Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Create testing.env from secret
+      - name: Inject testing.env
+        working-directory: ./backend
+        run: echo "${{ secrets.TESTING_ENV_FILE }}" > testing.env
+
+      # Step 2: Install dependencies
+      - name: Install dependencies
+        working-directory: ./backend
+        run: pip install -r requirements.txt
+
+      # Step 3: Run Pytest
+      - name: Run Pytest
+        working-directory: ./backend
+        env:
+          ENVIRONMENT: testing
+        run: python -m pytest

@@ -1,0 +1,14 @@
+# Use the official PostgreSQL image as base
+FROM postgres:latest
+
+# Set environment variables
+ENV POSTGRES_USER=superuser
+ENV POSTGRES_PASSWORD=superuser1
+ENV POSTGRES_DB=devdb
+
+# Optional: copy custom SQL scripts or config files
+# These scripts will run on container startup
+# COPY ./init.sql /docker-entrypoint-initdb.d/
+
+# Expose the PostgreSQL port
+EXPOSE 5432
