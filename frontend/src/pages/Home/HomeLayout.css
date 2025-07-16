@@ -1,0 +1,29 @@
+.button-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  padding: 1rem;
+  gap: 1rem;
+}
+
+.icon-button2 {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background-color: #3c3f45;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-decoration: none;
+  color: white;
+  font-weight: bold;
+  transition: background-color 0.3s;
+}
+
+.icon-button2:hover {
+  background-color: #7984fa;
+}
+
+.icon-button2.active {
+  background-color: #5865f2;
+}
