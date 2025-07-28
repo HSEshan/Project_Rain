@@ -1,0 +1,115 @@
+.
+├── .github
+│   └── workflows
+│       └── CI.yaml
+├── .pytest_cache
+├── backend
+│   ├── dev_notes.txt
+│   ├── event_broker
+│   │   ├── Dockerfile
+│   │   ├── main.py
+│   │   └── src
+│   ├── lease_manager
+│   │   ├── Dockerfile
+│   │   ├── main.py
+│   │   └── src
+│   ├── libs
+│   │   ├── event
+│   │   └── logging
+│   ├── rest_api
+│   │   ├── .env.example
+│   │   ├── Dockerfile
+│   │   ├── __init__.py
+│   │   ├── development.env
+│   │   ├── main.py
+│   │   ├── requirements.txt
+│   │   ├── src
+│   │   │   ├── api
+│   │   │   │   ├── __init__.py
+│   │   │   │   └── routes.py
+│   │   │   ├── auth
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── models.py
+│   │   │   │   ├── routes.py
+│   │   │   │   ├── schemas.py
+│   │   │   │   ├── service.py
+│   │   │   │   └── utils.py
+│   │   │   ├── core
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── config.py
+│   │   │   │   ├── logging.py
+│   │   │   │   ├── setup.py
+│   │   │   │   └── utils.py
+│   │   │   ├── database
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── core.py
+│   │   │   │   └── service.py
+│   │   │   ├── user
+│   │   │   │   ├── __init__.py
+│   │   │   │   ├── models.py
+│   │   │   │   ├── routes.py
+│   │   │   │   ├── schemas.py
+│   │   │   │   ├── service.py
+│   │   │   │   └── utils.py
+│   │   │   └── utils
+│   │   │       ├── exceptions.py
+│   │   │       └── hashing.py
+│   │   └── tests
+│   │       ├── conftest.py
+│   │       ├── test_auth.py
+│   │       └── test_health.py
+│   └── ws_gateway
+│       ├── Dockerfile
+│       ├── main.py
+│       └── src
+├── frontend
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── public
+│   │   └── vite.svg
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.tsx
+│   │   ├── assets
+│   │   │   └── logout_icon.svg
+│   │   ├── auth
+│   │   │   ├── AuthContext.tsx
+│   │   │   ├── AuthPage.tsx
+│   │   │   ├── LoginForm.tsx
+│   │   │   ├── RequireAuth.tsx
+│   │   │   ├── SignupForm.tsx
+│   │   │   └── practice.tsx
+│   │   ├── components
+│   │   │   └── Sidebar.tsx
+│   │   ├── index.css
+│   │   ├── layouts
+│   │   │   └── MainLayout.tsx
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   │   ├── Friends.tsx
+│   │   │   ├── Home
+│   │   │   │   ├── HomeLayout.css
+│   │   │   │   ├── HomeLayout.tsx
+│   │   │   │   ├── Trending.tsx
+│   │   │   │   └── WhatsNew.tsx
+│   │   │   └── Settings.tsx
+│   │   ├── routes
+│   │   │   └── AppRoutes.tsx
+│   │   ├── sidebar
+│   │   │   └── Sidebar.tsx
+│   │   ├── utils
+│   │   │   └── apiClient.ts
+│   │   └── vite-env.d.ts
+│   ├── tailwind.config.js
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
+├── generate_tree.py
+├── postgres
+│   └── Dockerfile.dev
+└── tree.txt
