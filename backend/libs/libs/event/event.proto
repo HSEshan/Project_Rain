@@ -8,7 +8,7 @@ message Event {
   string event_id = 1;
   string event_type = 2;
   string sender_id = 3;
-  string channel_id = 4
+  string channel_id = 4;
   string text = 5;
   string metadata = 6;
   string timestamp = 7;

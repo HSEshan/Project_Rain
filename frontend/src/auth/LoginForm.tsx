@@ -7,7 +7,7 @@ export default function LoginForm() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({ login: "", password: "" });
+  const [formData, setFormData] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -22,7 +22,7 @@ export default function LoginForm() {
       login(res.data.access_token); // Save token in cookie
       navigate("/home");
     } catch (err: any) {
-      setError("Invalid credentials");
+      setError("Invalid credentials: " + err.response.data.detail);
     }
   };
 
@@ -31,9 +31,9 @@ export default function LoginForm() {
       <h2 className="text-2xl font-semibold text-center mb-4">Log in</h2>
       <input
         type="text"
-        name="login"
+        name="username"
         placeholder="Username or Email"
-        value={formData.login}
+        value={formData.username}
         onChange={handleChange}
         className="w-full p-2 bg-gray-700 text-white rounded"
       />

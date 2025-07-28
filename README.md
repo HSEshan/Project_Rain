@@ -59,3 +59,9 @@
    ```
 
    The frontend will be available at `http://localhost:3000`.
+
+TODO
+Fix OAuth2 in login router
+Create and update models
+UUIDs for IDs
+Timestamp convertion to datetime for DB

@@ -1,21 +1,33 @@
 import asyncio
-import logging
 
+import structlog
 from sqlalchemy import text
+from src.core.config import settings
 from src.database.core import Base, engine
 
-logger = logging.getLogger("lifespan")
+logger = structlog.get_logger()
 
 
 async def startup_event():
     # Check database connection first
-    try:
-        async with engine.connect() as conn:
-            await conn.execute(text("SELECT 1"))
-        logger.info("Database connection verified")
-    except Exception as e:
-        logger.error(f"Database connection failed: {e}")
-        raise
+    retries = 5
+    while retries > 0:
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            logger.info(
+                f"Database connection verified: {settings.POSTGRES_HOST}:{settings.POSTGRES_PORT}"
+            )
+            break
+        except Exception as e:
+            logger.error(
+                f"Database connection failed, retrying... {retries} retries left",
+                error=e,
+            )
+            retries -= 1
+            await asyncio.sleep(2)
+    if retries == 0:
+        raise Exception("Database connection failed")
 
     async with engine.begin() as conn:
         logger.info("Creating Tables...")

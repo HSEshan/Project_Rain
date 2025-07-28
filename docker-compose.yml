@@ -1,0 +1,66 @@
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=superuser
+      - POSTGRES_PASSWORD=superuser1
+      - POSTGRES_DB=devdb
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "superuser", "-d", "devdb"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+
+  rest_api:
+    build:
+      context: ./backend
+      dockerfile: rest_api/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    env_file:
+      - ./backend/rest_api/development.env
+    environment:
+      - ENVIRONMENT=development
+      - LOG_FORMAT=pretty
+    volumes:
+      - ./backend/rest_api:/app
+
+  ws_gateway:
+    build:
+      context: ./backend
+      dockerfile: ws_gateway/Dockerfile
+    ports:
+      - "8001:8000"
+    depends_on:
+      - redis
+    env_file:
+      - ./backend/ws_gateway/development.env
+    environment:
+      - ENVIRONMENT=development
+      - GRPC_HOST=ws_gateway
+      - LOG_FORMAT=pretty
+    volumes:
+      - ./backend/ws_gateway:/app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app

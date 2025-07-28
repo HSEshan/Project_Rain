@@ -1,7 +1,8 @@
 from fastapi import Depends
+from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.auth.schemas import Token, UserCreate, UserLogin, UserResponse
+from src.auth.schemas import Token, UserCreate, UserResponse
 from src.auth.utils import create_access_token, parse_login_method
 from src.database.core import get_db
 from src.database.service import BaseService
@@ -50,15 +51,15 @@ class AuthService(BaseService):
             await self.db.refresh(user)
         return UserResponse(id=user.id, username=user.username, email=user.email)
 
-    async def login_user(self, user: UserLogin) -> Token:
-        login_method = parse_login_method(user.login)
+    async def login_user(self, form_data: OAuth2PasswordRequestForm) -> Token:
+        login_method = parse_login_method(form_data.username)
         if login_method == "email":
-            user_to_login = await self.get_user_by_email(user.login.lower())
+            user_to_login = await self.get_user_by_email(form_data.username.lower())
         elif login_method == "username":
-            user_to_login = await self.get_user_by_username(user.login)
+            user_to_login = await self.get_user_by_username(form_data.username)
         if not user_to_login:
             raise NotFoundException("User not found")
-        if not verify_password(user.password, user_to_login.password):
+        if not verify_password(form_data.password, user_to_login.password):
             raise UnauthorizedException("Invalid password")
 
         return await create_access_token(

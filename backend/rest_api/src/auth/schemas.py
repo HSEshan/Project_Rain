@@ -45,8 +45,3 @@ class UserResponse(BaseModel):
     id: int = Field(ge=1)
     username: str
     email: EmailStr
-
-
-class UserLogin(BaseModel):
-    login: str | EmailStr
-    password: str

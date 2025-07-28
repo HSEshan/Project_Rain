@@ -37,7 +37,7 @@ export default function SignupForm() {
       });
 
       login(loginRes.data.access_token);
-      navigate("/dashboard");
+      navigate("/home");
     } catch (err: any) {
       if (err.response?.status === 422) {
         const fieldErrors: { [key: string]: string } = {};
