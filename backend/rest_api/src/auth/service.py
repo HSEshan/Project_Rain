@@ -17,7 +17,7 @@ from src.utils.hashing import get_password_hash, verify_password
 
 class AuthService(BaseService):
 
-    async def get_user_by_id(self, user_id: int) -> User:
+    async def get_user_by_id(self, user_id: str) -> User:
         result = await self.db.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
         if not user:
@@ -44,7 +44,7 @@ class AuthService(BaseService):
             user = User(
                 email=user.email,
                 username=user.username,
-                password=get_password_hash(user.password),
+                password_hash=get_password_hash(user.password),
             )
             self.db.add(user)
             await self.db.flush()
@@ -59,16 +59,19 @@ class AuthService(BaseService):
             user_to_login = await self.get_user_by_username(form_data.username)
         if not user_to_login:
             raise NotFoundException("User not found")
-        if not verify_password(form_data.password, user_to_login.password):
+        if not verify_password(
+            plain_password=form_data.password,
+            hashed_password=user_to_login.password_hash,
+        ):
             raise UnauthorizedException("Invalid password")
 
         return await create_access_token(
-            user_to_login.id,
+            str(user_to_login.id),
             user_to_login.email,
             user_to_login.username,
         )
 
-    async def delete_user(self, user_id: int):
+    async def delete_user(self, user_id: str):
         user = await self.get_user_by_id(user_id)
         await self.db.delete(user)
         await self.db.commit()

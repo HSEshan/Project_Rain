@@ -37,10 +37,15 @@ services:
       - ./backend/rest_api/development.env
     environment:
       - ENVIRONMENT=development
+      - LOG_FORMAT=json
       - LOG_LEVEL=DEBUG
-      - LOG_FORMAT=pretty
     volumes:
       - ./backend/rest_api:/app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   ws_gateway:
     build:
@@ -55,10 +60,15 @@ services:
     environment:
       - ENVIRONMENT=development
       - GRPC_HOST=ws_gateway
-      - LOG_FORMAT=pretty
+      - LOG_FORMAT=json
       - LOG_LEVEL=DEBUG
     volumes:
       - ./backend/ws_gateway:/app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   event_consumer:
     build:
@@ -68,10 +78,15 @@ services:
       - redis
     environment:
       - ENVIRONMENT=development
-      - LOG_FORMAT=pretty
+      - LOG_FORMAT=json
       - LOG_LEVEL=DEBUG
     volumes:
       - ./backend/event_consumer:/app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   lease_manager:
     build:
@@ -81,10 +96,15 @@ services:
       - redis
     environment:
       - ENVIRONMENT=development
-      - LOG_FORMAT=pretty
+      - LOG_FORMAT=json
       - LOG_LEVEL=DEBUG
     volumes:
       - ./backend/lease_manager:/app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   frontend:
     build:
@@ -96,5 +116,34 @@ services:
       - ./frontend:/app
       - /app/node_modules
 
+  grafana:
+    image: grafana/grafana:10.0.3
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - loki
+
+  loki:
+    image: grafana/loki:2.9.2
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki:/var/loki
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml
+    command: -config.file=/etc/loki/loki-config.yaml
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail:/etc/promtail
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    depends_on:
+      - loki
+
 volumes:
   postgres_data:
+  grafana_data:

@@ -6,3 +6,4 @@ pydantic_core==2.33.2
 structlog==25.4.0
 grpcio-tools==1.74.0
 setuptools==80.9.0
+orjson==3.11.1

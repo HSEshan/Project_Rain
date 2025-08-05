@@ -22,7 +22,7 @@ class EventCodec:
                 sender_id=str(event.sender_id),
                 receiver_id=str(event.receiver_id),
                 text=event.text,
-                metadata=json.dumps(event.metadata or {}),
+                metadata=json.dumps(event.metadata or {}),  # Serialise from pydantic
                 timestamp=event.timestamp,
             )
         elif isinstance(event, dict):
@@ -32,7 +32,7 @@ class EventCodec:
                 sender_id=event["sender_id"],
                 receiver_id=event["receiver_id"],
                 text=event["text"],
-                metadata=json.dumps(event.get("metadata") or {}),
+                metadata=event["metadata"],  # Already serialized
                 timestamp=event["timestamp"],
             )
         else:
@@ -47,7 +47,7 @@ class EventCodec:
                 sender_id=event.sender_id,
                 receiver_id=event.receiver_id,
                 text=event.text,
-                metadata=json.loads(event.metadata or "{}"),
+                metadata=json.loads(event.metadata or "{}"),  # Deserialise to dict
                 timestamp=event.timestamp,
             )
         elif isinstance(event, dict):
@@ -57,7 +57,9 @@ class EventCodec:
                 sender_id=event["sender_id"],
                 receiver_id=event["receiver_id"],
                 text=event["text"],
-                metadata=json.loads(event.get("metadata") or "{}"),
+                metadata=json.loads(
+                    event.get("metadata") or "{}"
+                ),  # Deserialise to dict
                 timestamp=event["timestamp"],
             )
         else:
@@ -72,7 +74,7 @@ class EventCodec:
                 "sender_id": event.sender_id,
                 "receiver_id": event.receiver_id,
                 "text": event.text,
-                "metadata": json.dumps(event.metadata or {}),
+                "metadata": json.dumps(event.metadata or {}),  # Serialise from pydantic
                 "timestamp": event.timestamp,
             }
         elif isinstance(event, event_pb2.Event):
@@ -82,7 +84,7 @@ class EventCodec:
                 "sender_id": event.sender_id,
                 "receiver_id": event.receiver_id,
                 "text": event.text,
-                "metadata": json.dumps(event.metadata or {}),
+                "metadata": event.metadata,  # Already serialized
                 "timestamp": event.timestamp,
             }
         else:

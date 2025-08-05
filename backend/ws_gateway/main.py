@@ -1,7 +1,11 @@
-from libs.logging.logger import setup_logging
+import os
+
+from libs.logging import setup_logging
 
 # Logging setup before any module imports
-setup_logging(service_name="ws_gateway")
+log_format = os.getenv("LOG_FORMAT", "json")
+log_level = os.getenv("LOG_LEVEL", "INFO")
+setup_logging(service_name="ws_gateway", log_format=log_format, level=log_level)
 
 from fastapi import FastAPI
 from src.core.setup import create_app

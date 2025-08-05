@@ -2,11 +2,11 @@ import asyncio
 from typing import List, Optional
 
 import structlog
-from src.core.config import settings
-from redis.asyncio import Redis
-
 from libs.event.codec import EventCodec
 from libs.event.schema import Event
+from libs.rediskeys import RediKeys
+from redis.asyncio import Redis
+from src.core.config import settings
 
 logger = structlog.get_logger()
 
@@ -32,6 +32,7 @@ class RedisManager:
                 await asyncio.sleep(1)
 
         if retries == 0:
+            logger.critical("Failed to connect to Redis, max retries reached")
             raise Exception("Failed to connect to Redis, max retries reached")
 
     async def disconnect(self):
@@ -39,29 +40,31 @@ class RedisManager:
             await self.redis.aclose()
         logger.info("Disconnected from Redis")
 
-    async def set_user_instance(
+    async def set_user_grpc_endpoint(
         self, user_id: str, grpc_endpoint: str, ttl: int = settings.DEFAULT_TTL_SECONDS
     ):
-        await self.redis.setex(f"user:{user_id}:instance", ttl, grpc_endpoint)
+        await self.redis.setex(RediKeys.user_grpc_endpoint(user_id), ttl, grpc_endpoint)
 
-    async def get_user_instance(self, user_id: str) -> Optional[str]:
-        return await self.redis.get(f"user:{user_id}:instance")
+    async def get_user_grpc_endpoint(self, user_id: str) -> Optional[str]:
+        return await self.redis.get(RediKeys.user_grpc_endpoint(user_id))
 
-    async def delete_user_instance(self, user_id: str):
-        await self.redis.delete(f"user:{user_id}:instance")
+    async def delete_user_grpc_endpoint(self, user_id: str):
+        await self.redis.delete(RediKeys.user_grpc_endpoint(user_id))
 
-    async def add_instance_to_channel(
+    async def add_grpc_endpoint_to_channel(
         self,
         channel_id: str,
         grpc_endpoint: str,
         ttl: int = settings.DEFAULT_TTL_SECONDS,
     ):
-        key = f"channel:{channel_id}:instances"
+        key = RediKeys.channel_grpc_endpoints(channel_id)
         await self.redis.sadd(key, grpc_endpoint)
         await self.redis.expire(key, ttl)
 
-    async def remove_instance_from_channel(self, channel_id: str, grpc_endpoint: str):
-        key = f"channel:{channel_id}:instances"
+    async def remove_grpc_endpoint_from_channel(
+        self, channel_id: str, grpc_endpoint: str
+    ):
+        key = RediKeys.channel_grpc_endpoints(channel_id)
         await self.redis.srem(key, grpc_endpoint)
         if await self.redis.scard(key) == 0:
             await self.redis.delete(key)
@@ -69,18 +72,18 @@ class RedisManager:
     async def add_channel_to_user(
         self, user_id: str, channel_id: str, ttl: int = settings.DEFAULT_TTL_SECONDS
     ):
-        key = f"user:{user_id}:channels"
+        key = RediKeys.user_channels(user_id)
         await self.redis.sadd(key, str(channel_id))
         await self.redis.expire(key, ttl)
 
     async def remove_channel_from_user(self, user_id: str, channel_id: str):
-        key = f"user:{user_id}:channels"
+        key = RediKeys.user_channels(user_id)
         await self.redis.srem(key, str(channel_id))
         if await self.redis.scard(key) == 0:
             await self.redis.delete(key)
 
     async def get_user_channel_ids(self, user_id: str) -> List[str]:
-        key = f"user:{user_id}:channels"
+        key = RediKeys.user_channels(user_id)
         if await self.redis.exists(key):
             raw_ids = await self.redis.smembers(key)
             decoded = [cid.decode() for cid in raw_ids]
@@ -96,21 +99,31 @@ class RedisManager:
         self,
         user_id: str,
         channel_ids: List[str],
-        ttl: int = settings.DEFAULT_TTL_SECONDS,
+        ttl: int = 120,
     ):
-        key = f"user:{user_id}:channels"
+        key = RediKeys.user_channels(user_id)
         channel_strs = [str(cid) for cid in channel_ids]
         await self.redis.sadd(key, *channel_strs)
         await self.redis.expire(key, ttl)
 
     async def delete_user_channels(self, user_id: str):
-        key = f"user:{user_id}:channels"
+        key = RediKeys.user_channels(user_id)
         await self.redis.delete(key)
 
     async def push_event_to_stream(self, shard_id: str, event: Event):
-        key = f"stream:{shard_id}"
-        data = EventCodec.pydantic_to_redis(event)
+        key = RediKeys.stream_shard(shard_id)
+        data = EventCodec.to_redis(event)
         await self.redis.xadd(key, data)
+
+    async def batch_push_events_to_streams(self, batch: dict[str, list[Event]]):
+        pipe = self.redis.pipeline()
+        for shard_id, events in batch.items():
+            key = RediKeys.stream_shard(shard_id)
+            event_data = [EventCodec.to_redis(event) for event in events]
+            for data in event_data:
+                pipe.xadd(key, data)
+
+        await pipe.execute()
 
     async def query_user_channels_from_db(self, user_id: str) -> List[str]:
         """
@@ -119,7 +132,4 @@ class RedisManager:
         """
         # Replace with ORM call like:
         # return await db.get_user_channels(user_id)
-        return [
-            "c641e03c-2571-4479-abbc-8d7143913457",
-            "e7dfa25a-fb72-44ca-b5fc-632d954ef93c",
-        ]  # Placeholder
+        return ["c1a1e8c8-7abb-489f-88ec-66f5476c6a10"]  # Placeholder

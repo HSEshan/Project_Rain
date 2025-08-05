@@ -18,7 +18,18 @@ export default function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await apiClient.post("/auth/login", formData);
+      const res = await apiClient.post(
+        "/auth/login",
+        new URLSearchParams({
+          username: formData.username,
+          password: formData.password,
+        }),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        }
+      );
       login(res.data.access_token); // Save token in cookie
       navigate("/home");
     } catch (err: any) {

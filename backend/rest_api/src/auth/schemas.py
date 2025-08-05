@@ -42,6 +42,6 @@ class UserCreate(BaseModel):
 
 
 class UserResponse(BaseModel):
-    id: int = Field(ge=1)
+    id: str
     username: str
     email: EmailStr

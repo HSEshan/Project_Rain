@@ -12,7 +12,7 @@ export default function SignupForm() {
     email: "",
     password: "",
   });
-
+  const [response, setResponse] = useState("");
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [generalError, setGeneralError] = useState("");
 
@@ -28,17 +28,16 @@ export default function SignupForm() {
     setGeneralError("");
 
     try {
-      const res = await apiClient.post("/auth/register", formData);
-
-      // Optionally: auto-login after successful signup
-      const loginRes = await apiClient.post("/auth/login", {
-        login: formData.username,
-        password: formData.password,
-      });
-
-      login(loginRes.data.access_token);
-      navigate("/home");
+      const res = await apiClient
+        .post("/auth/register", formData)
+        .then((res) => {
+          setResponse("Signup successful:" + res.data);
+        })
+        .catch((err) => {
+          setResponse(err.response.data);
+        });
     } catch (err: any) {
+      console.log(err);
       if (err.response?.status === 422) {
         const fieldErrors: { [key: string]: string } = {};
         for (const detail of err.response.data.detail) {

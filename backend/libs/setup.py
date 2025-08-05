@@ -12,6 +12,7 @@ setup(
         "pydantic_core==2.33.2",
         "structlog==25.4.0",
         "grpcio-tools==1.74.0",
+        "orjson==3.11.1",
     ],
     python_requires=">=3.12.4",
 )
