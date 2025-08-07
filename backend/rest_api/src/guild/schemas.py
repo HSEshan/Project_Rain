@@ -13,16 +13,11 @@ class GuildUpdate(BaseModel):
     description: str
 
 
-class GuildMemberCreate(BaseModel):
-    guild_id: str
-    user_id: str
-    status: GuildMemberStatus
-
-
-class GuildMemberUpdate(BaseModel):
-    status: GuildMemberStatus
-
-
 class GuildMemberInvite(BaseModel):
     guild_id: str
     user_id: str
+
+
+class GuildMemberRemove(BaseModel):
+    guild_id: str
+    member_id: str
