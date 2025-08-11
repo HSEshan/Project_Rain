@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import apiClient from "../../utils/apiClient";
+import apiClient from "../../utils/apiClientBase";
 
 export default function WhatsNew() {
   const [data, setData] = useState<string | null>(null);

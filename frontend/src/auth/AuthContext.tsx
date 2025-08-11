@@ -14,12 +14,12 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true); // <== NEW
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const token = cookies.get("token");
     setIsAuthenticated(!!token);
-    setIsLoading(false); // <== Done loading after checking cookie
+    setIsLoading(false);
   }, []);
 
   const login = (token: string) => {

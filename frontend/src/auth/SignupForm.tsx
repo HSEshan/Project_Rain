@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import apiClient from "../utils/apiClient";
+import apiClient from "../utils/apiClientBase";
 import { useAuth } from "../auth/AuthContext";
 
 export default function SignupForm() {

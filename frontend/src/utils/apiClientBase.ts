@@ -4,7 +4,7 @@ import { Cookies } from "react-cookie";
 const cookies = new Cookies();
 
 const apiClient = axios.create({
-  baseURL: "http://localhost:8000/api", // Update as needed
+  baseURL: "http://localhost:8000/api",
   headers: {
     "Content-Type": "application/json",
   },
