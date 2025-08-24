@@ -46,8 +46,7 @@ class RedisStreamConsumer:
 
         except Exception as e:
             logger.critical(
-                f"Error starting consumer, consumer_id={self.consumer_id}",
-                error=e,
+                "Error starting consumer, consumer_id=%s, error=%s", self.consumer_id, e
             )
             raise
 
@@ -57,16 +56,16 @@ class RedisStreamConsumer:
         await self.connection_pool.stop()
         await self.grpc_endpoint_cache.stop()
         await self.unregister()
-        logger.info(f"Consumer {self.consumer_id} stopped")
+        logger.info("Consumer %s stopped", self.consumer_id)
 
     async def register(self):
         await self.redis_manager.register_consumer(self.consumer_id)
         await self.redis_manager.send_heartbeat(self.consumer_id, ttl=15)
-        logger.info(f"Consumer {self.consumer_id} registered")
+        logger.info("Consumer %s registered", self.consumer_id)
 
     async def unregister(self):
         await self.redis_manager.unregister_consumer(self.consumer_id)
-        logger.info(f"Consumer {self.consumer_id} unregistered")
+        logger.info("Consumer %s unregistered", self.consumer_id)
 
     def create_stream_semaphore(self, stream_name: str):
         self.stream_semaphores[stream_name] = asyncio.Semaphore(
@@ -94,7 +93,7 @@ class RedisStreamConsumer:
 
                 if current_fetched_shards != self.fetched_shards:
                     self.fetched_shards = current_fetched_shards
-                    logger.info(f"Fetched shards updated: {self.fetched_shards}")
+                    logger.info("Fetched shards updated: %s", self.fetched_shards)
 
                 # Launch concurrent tasks to read from each stream. Update on each lease call.
                 for shard in self.fetched_shards:
@@ -103,14 +102,14 @@ class RedisStreamConsumer:
                     self.create_stream_semaphore(shard)
                     task = asyncio.create_task(self._read_and_process_stream(shard))
                     self.shard_process_tasks[shard] = task
-                    logger.debug(f"Launched task for shard: {shard}")
+                    logger.debug("Launched task for shard: %s", shard)
 
                 # Cleanup tasks that are not in the shards list
                 for shard in list(self.shard_process_tasks.keys()):
                     if shard not in self.fetched_shards:
                         self.shard_process_tasks[shard].cancel()
                         del self.shard_process_tasks[shard]
-                        logger.debug(f"Cancelled task for shard: {shard}")
+                        logger.debug("Cancelled task for shard: %s", shard)
 
                 await asyncio.sleep(0.1)
 
@@ -118,7 +117,7 @@ class RedisStreamConsumer:
                 logger.warning("Timeout fetching leased shards, retrying...")
                 await asyncio.sleep(1)
             except Exception as e:
-                logger.error(f"Error in consume loop: {e}")
+                logger.error("Error in consume loop: %s", e)
                 await asyncio.sleep(1)
 
         logger.warning("Consume loop stopped")
@@ -136,7 +135,7 @@ class RedisStreamConsumer:
                 else:
                     await asyncio.sleep(0.01)
             except Exception as e:
-                logger.error(f"Error reading from {stream_name}: {e}")
+                logger.error("Error reading from %s: %s", stream_name, e)
                 await asyncio.sleep(1)
 
     async def _process_events(self, response):
@@ -173,7 +172,7 @@ class RedisStreamConsumer:
             success_message_ids = []
             for i, result in enumerate(results):
                 if isinstance(result, Exception):
-                    logger.error(f"Failed to process event: {result}")
+                    logger.error("Failed to process event: %s", result)
                 else:
                     success_message_ids.append(events[i][0])
 
@@ -182,7 +181,10 @@ class RedisStreamConsumer:
 
             if success_count > 0:
                 logger.info(
-                    f"Successfully processed {success_count} / {total_count} events from {stream_name_str}"
+                    "Successfully processed %s / %s events from %s",
+                    success_count,
+                    total_count,
+                    stream_name_str,
                 )
 
                 # Batch ACK successful messages
@@ -190,7 +192,7 @@ class RedisStreamConsumer:
                     stream_name_str, self.consumer_group, success_message_ids
                 )
             else:
-                logger.warning(f"Failed to process all events from {stream_name_str}")
+                logger.warning("Failed to process all events from %s", stream_name_str)
 
     @bind_event_context(event_arg_name="event_data")
     async def _process_single_message(
@@ -208,13 +210,15 @@ class RedisStreamConsumer:
 
             # Wait for endpoints
             grpc_endpoints = await grpc_endpoints_task
-            logger.debug(f"gRPC endpoints for event delivery: {grpc_endpoints}")
+            logger.debug("gRPC endpoints for event delivery: %s", grpc_endpoints)
             if not grpc_endpoints:
                 logger.warning(
-                    f"No gRPC endpoints found for receiver: {event_data['receiver_id']}"
+                    "No gRPC endpoints found for receiver: %s",
+                    event_data["receiver_id"],
                 )
                 raise Exception(
-                    f"No gRPC endpoints found for receiver: {event_data['receiver_id']}"
+                    "No gRPC endpoints found for receiver: %s",
+                    event_data["receiver_id"],
                 )
 
             # Send to all endpoints concurrently
@@ -233,14 +237,18 @@ class RedisStreamConsumer:
 
             if successful_sends > 0:
                 logger.debug(
-                    f"ACK {message_id} from {stream_name} ({successful_sends}/{len(grpc_endpoints)} sends successful)"
+                    "ACK %s from %s (%s/%s sends successful)",
+                    message_id,
+                    stream_name,
+                    successful_sends,
+                    len(grpc_endpoints),
                 )
             else:
-                logger.error(f"All gRPC sends failed for {message_id}")
+                logger.error("All gRPC sends failed for %s", message_id)
                 # Consider retry logic or dead letter queue
 
         except Exception as e:
-            logger.error(f"Failed to process {message_id}: {e}")
+            logger.error("Failed to process %s: %s", message_id, e)
             raise
 
     @bind_event_context(event_arg_name="event")
@@ -253,15 +261,17 @@ class RedisStreamConsumer:
 
             # Add timeout to prevent hanging
             await asyncio.wait_for(stub.SendEvent(event), timeout=config.grpc_timeout)
-            logger.debug(f"Sent {event} to {grpc_endpoint}")
+            logger.debug("Sent %s to %s", event, grpc_endpoint)
             return True
 
         except asyncio.TimeoutError:
-            logger.error(f"Timeout sending to {grpc_endpoint} for message {message_id}")
+            logger.error(
+                "Timeout sending to %s for message %s", grpc_endpoint, message_id
+            )
             raise
         except grpc.RpcError as e:
-            logger.error(f"gRPC error sending to {grpc_endpoint}: {e}")
+            logger.error("gRPC error sending to %s: %s", grpc_endpoint, e)
             raise
         except Exception as e:
-            logger.error(f"Unexpected error sending to {grpc_endpoint}: {e}")
+            logger.error("Unexpected error sending to %s: %s", grpc_endpoint, e)
             raise

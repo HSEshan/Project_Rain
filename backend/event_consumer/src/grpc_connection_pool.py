@@ -32,7 +32,7 @@ class GrpcConnectionPool:
                 try:
                     await channel.close()
                 except Exception as e:
-                    logger.warning(f"Error closing channel for {endpoint}: {e}")
+                    logger.warning("Error closing channel for %s: %s", endpoint, e)
             self._channels.clear()
             logger.info("gRPC connection pool stopped")
 
@@ -53,10 +53,10 @@ class GrpcConnectionPool:
                 oldest_endpoint, oldest_channel = self._channels.popitem(last=False)
                 try:
                     await oldest_channel.close()
-                    logger.debug(f"Evicted connection to {oldest_endpoint}")
+                    logger.debug("Evicted connection to %s", oldest_endpoint)
                 except Exception as e:
                     logger.warning(
-                        f"Error closing evicted channel {oldest_endpoint}: {e}"
+                        "Error closing evicted channel %s: %s", oldest_endpoint, e
                     )
 
             # Create new channel with optimized settings for real-time messaging
@@ -82,7 +82,7 @@ class GrpcConnectionPool:
 
             # Add to end (most recently used)
             self._channels[endpoint] = channel
-            logger.debug(f"Created new connection to {endpoint}")
+            logger.debug("Created new connection to %s", endpoint)
             return event_pb2_grpc.EventServiceStub(channel)
 
     async def close_connection(self, endpoint: str):
@@ -92,9 +92,9 @@ class GrpcConnectionPool:
                 try:
                     await self._channels[endpoint].close()
                     del self._channels[endpoint]
-                    logger.info(f"Manually closed connection to {endpoint}")
+                    logger.info("Manually closed connection to %s", endpoint)
                 except Exception as e:
-                    logger.warning(f"Error closing connection to {endpoint}: {e}")
+                    logger.warning("Error closing connection to %s: %s", endpoint, e)
 
     def is_connected(self, endpoint: str) -> bool:
         """Check if a connection exists for the endpoint."""

@@ -37,11 +37,11 @@ async def main():
 
         await asyncio.gather(heartbeat_task, consume_task)
 
-        logger.info(f"Consumer started with ID: {consumer.consumer_id}")
-        logger.info(f"Config: {config}")
+        logger.info("Consumer started with ID: %s", consumer.consumer_id)
+        logger.info("Config: %s", config)
 
     except Exception as e:
-        logger.critical(f"Service error: {e}")
+        logger.critical("Service error: %s", e)
         raise
     finally:
         if consumer:

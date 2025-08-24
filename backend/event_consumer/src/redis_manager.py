@@ -26,8 +26,7 @@ class RedisManager:
                 break
             except Exception as e:
                 logger.error(
-                    f"Failed to connect to Redis, retries left: {retries}",
-                    error=e,
+                    "Failed to connect to Redis, retries left: %s", retries, error=e
                 )
                 retries -= 1
                 await asyncio.sleep(1)
@@ -43,11 +42,11 @@ class RedisManager:
 
     async def register_consumer(self, consumer_id: str):
         await self.redis.sadd(RediKeys.event_consumers(), consumer_id)
-        logger.info(f"Consumer {consumer_id} registered")
+        logger.info("Consumer %s registered", consumer_id)
 
     async def unregister_consumer(self, consumer_id: str):
         await self.redis.srem(RediKeys.event_consumers(), consumer_id)
-        logger.info(f"Consumer {consumer_id} unregistered")
+        logger.info("Consumer %s unregistered", consumer_id)
 
     async def send_heartbeat(self, consumer_id: str, ttl: int = config.heartbeat_ttl):
         await self.redis.set(RediKeys.heartbeat(consumer_id), "alive", ex=ttl)
@@ -76,7 +75,9 @@ class RedisManager:
         members = await self.redis.smembers(key)
         decoded_members = [m.decode() for m in members]
         logger.info(
-            f"Fetched instances for channel: {channel_id}, instances: {decoded_members}"
+            "Fetched instances for channel: %s, instances: %s",
+            channel_id,
+            decoded_members,
         )
         return decoded_members
 
