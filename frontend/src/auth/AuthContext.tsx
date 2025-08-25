@@ -8,6 +8,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (token: string) => void;
   logout: () => void;
+  getToken: () => string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -15,28 +16,40 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     const token = cookies.get("token");
     setIsAuthenticated(!!token);
+    setToken(token);
     setIsLoading(false);
   }, []);
 
   const login = (token: string) => {
     cookies.set("token", token, { path: "/" });
     setIsAuthenticated(true);
+    setToken(token);
   };
 
   const logout = () => {
     cookies.remove("token", { path: "/" });
     setIsAuthenticated(false);
+    setToken(null);
   };
 
-  return (
-    <AuthContext.Provider value={{ isAuthenticated, isLoading, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const getToken = () => {
+    return token;
+  };
+
+  const values = {
+    isAuthenticated,
+    isLoading,
+    login,
+    logout,
+    getToken,
+  };
+
+  return <AuthContext.Provider value={values}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

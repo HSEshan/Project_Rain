@@ -4,7 +4,7 @@ type EventPayload = {
   sender_id: string;
   receiver_id: string;
   text: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
   timestamp: string;
 };
 

@@ -1,10 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-
-// Utility
-function getTokenFromCookie(): string | null {
-  const match = document.cookie.match(/(?:^|;\s*)token=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : null;
-}
+import { useWebSocket } from "../../providers/WebsocketProvider";
+import { useAuth } from "../../auth/AuthContext";
+import { eventBus } from "../../shared/events/EventBus";
 
 export default function Trending() {
   const [connected, setConnected] = useState<boolean>(false);
@@ -15,46 +12,20 @@ export default function Trending() {
     text: "",
   });
   const [messages, setMessages] = useState<any[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
-
+  const ws = useWebSocket();
+  const { getToken } = useAuth();
   useEffect(() => {
-    const token = getTokenFromCookie();
+    const token = getToken();
     if (!token) {
       setError("No auth token found.");
       return;
     }
+  }, [getToken]);
 
-    const ws = new WebSocket(`ws://localhost:8001/ws?token=${token}`);
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-      console.log("✅ WebSocket connected");
-      setConnected(true);
-    };
-
-    ws.onmessage = (event) => {
-      console.log("📨 Received:", event.data);
-      try {
-        const parsed = JSON.parse(event.data);
-        setMessages((prev) => [parsed, ...prev]);
-      } catch (e) {
-        console.error("Failed to parse message", e);
-      }
-    };
-
-    ws.onclose = () => {
-      console.log("❌ WebSocket disconnected");
-      setConnected(false);
-    };
-
-    ws.onerror = (err) => {
-      console.error("WebSocket error:", err);
-      setError("WebSocket error occurred.");
-    };
-
-    return () => {
-      ws.close();
-    };
+  useEffect(() => {
+    eventBus.subscribe("notification", (event: any) => {
+      setMessages((prev) => [event, ...prev]);
+    });
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -66,7 +37,7 @@ export default function Trending() {
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
       setError("WebSocket not connected.");
       return;
     }
@@ -79,7 +50,7 @@ export default function Trending() {
       metadata: null,
     };
 
-    wsRef.current.send(JSON.stringify(payload));
+    ws.send(JSON.stringify(payload));
     setFormData((prev) => ({ ...prev, text: "" }));
   };
 

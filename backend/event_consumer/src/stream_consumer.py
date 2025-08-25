@@ -211,6 +211,7 @@ class RedisStreamConsumer:
             # Wait for endpoints
             grpc_endpoints = await grpc_endpoints_task
             logger.debug("gRPC endpoints for event delivery: %s", grpc_endpoints)
+            print("gRPC endpoints for event delivery:", grpc_endpoints)
             if not grpc_endpoints:
                 logger.warning(
                     "No gRPC endpoints found for receiver: %s",

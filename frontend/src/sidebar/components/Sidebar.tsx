@@ -29,9 +29,9 @@ export function Sidebar() {
       <div className="flex flex-col space-y-3 overflow-y-auto">
         {guilds.map((guild) => (
           <Link
-            key={guild.id}
-            to={`/guilds/${guild.id}`}
-            onClick={() => resetGuildUnread(guild.id)}
+            key={crypto.randomUUID()}
+            to={`/guilds/${guild}`}
+            onClick={() => resetGuildUnread(guild)}
             className="relative flex items-center justify-center w-12 h-12 bg-gray-800 rounded-full hover:bg-gray-700"
           >
             <GuildIcon guild={guild} />

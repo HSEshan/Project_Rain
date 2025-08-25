@@ -49,7 +49,7 @@ class AuthService(BaseService):
             self.db.add(user)
             await self.db.flush()
             await self.db.refresh(user)
-        return UserResponse(id=user.id, username=user.username, email=user.email)
+        return UserResponse(id=str(user.id), username=user.username, email=user.email)
 
     async def login_user(self, form_data: OAuth2PasswordRequestForm) -> Token:
         login_method = parse_login_method(form_data.username)

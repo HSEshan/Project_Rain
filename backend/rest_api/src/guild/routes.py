@@ -6,6 +6,22 @@ from src.guild.service import GuildService, get_guild_service
 router = APIRouter(prefix="/guilds", tags=["guilds"])
 
 
+@router.get("/me", status_code=status.HTTP_200_OK)
+async def get_user_guilds(
+    user: user_dependency,
+    guild_service: GuildService = Depends(get_guild_service),
+):
+    return await guild_service.get_user_guild_ids(user)
+
+
+@router.get("/{guild_id}", status_code=status.HTTP_200_OK)
+async def get_guild_by_id(
+    guild_id: str,
+    guild_service: GuildService = Depends(get_guild_service),
+):
+    return await guild_service.get_guild_by_id(guild_id)
+
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_guild(
     guild: GuildCreate,
@@ -21,7 +37,9 @@ async def create_guild_invite(
     current_user: user_dependency,
     guild_service: GuildService = Depends(get_guild_service),
 ):
-    return await guild_service.create_guild_invite(current_user, invite)
+    return await guild_service.create_guild_invite(
+        current_user, user_to_invite=invite.user_id, guild_id=invite.guild_id
+    )
 
 
 @router.post(
