@@ -4,11 +4,13 @@ from time import time
 from typing import Dict, List
 
 import structlog
-from libs.event.schema import Event
-from libs.logging import bind_event_context
 from src.core.config import settings
 from src.redis_manager import RedisManager
+from src.services.event_dispatcher import EventDispatcher
 from src.websocket_manager import WebsocketManager
+
+from libs.event.schema import Event
+from libs.logging import bind_event_context
 
 logger = structlog.get_logger()
 
@@ -22,6 +24,7 @@ class EventProcessor:
         self.redis_manager: RedisManager | None = None
         self.event_queue: asyncio.Queue[Event] = asyncio.Queue()
         self._batch_task: asyncio.Task | None = None
+        self.event_dispatcher = EventDispatcher()
         self.event_send_log = [0, time()]
 
     def set_websocket_manager(self, websocket_manager: WebsocketManager):
@@ -66,18 +69,7 @@ class EventProcessor:
                     break
 
             if batch:
-                await self._flush_to_redis(batch)
-                logger.debug(
-                    f"Flushed {sum(len(v) for v in batch.values())} events to Redis"
-                )
-
-    async def _flush_to_redis(self, batch: Dict[str, List[Event]]):
-        try:
-            await self.redis_manager.batch_push_events_to_streams(batch)
-            events = [event for v in batch.values() for event in v]
-            logger.debug(f"Flushed {events} to Redis")
-        except Exception as e:
-            logger.error(f"Failed to batch push to Redis: {e}")
+                await self.event_dispatcher.dispatch_events(batch)
 
     @bind_event_context(event_arg_name="event")
     async def send_event_to_clients(self, event: Event):

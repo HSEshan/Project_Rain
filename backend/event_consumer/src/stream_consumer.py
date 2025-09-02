@@ -3,13 +3,14 @@ import time
 
 import grpc
 import structlog
-from libs.event.codec import EventCodec
-from libs.event.event_pb2 import Event as ProtobufEvent
-from libs.logging import bind_event_context
 from src.config import config
 from src.grpc_connection_pool import GrpcConnectionPool
 from src.grpc_endpoint_cache import GrpcEndpointCache
 from src.redis_manager import RedisManager
+
+from libs.event.codec import EventCodec
+from libs.event.event_pb2 import Event as ProtobufEvent
+from libs.logging import bind_event_context
 
 logger = structlog.get_logger(__name__)
 
@@ -140,7 +141,7 @@ class RedisStreamConsumer:
 
     async def _process_events(self, response):
         """
-        Process events from the Redis stream concurrently with optimized task management.
+        Process events from the Redis stream concurrently
         """
         for stream_name, events in response:
             stream_name_str = stream_name.decode("utf-8")
@@ -211,7 +212,6 @@ class RedisStreamConsumer:
             # Wait for endpoints
             grpc_endpoints = await grpc_endpoints_task
             logger.debug("gRPC endpoints for event delivery: %s", grpc_endpoints)
-            print("gRPC endpoints for event delivery:", grpc_endpoints)
             if not grpc_endpoints:
                 logger.warning(
                     "No gRPC endpoints found for receiver: %s",

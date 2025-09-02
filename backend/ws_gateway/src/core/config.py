@@ -10,6 +10,12 @@ class Settings(BaseSettings):
     DEFAULT_TTL_SECONDS: int
     NUM_SHARDS: int
 
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_DB: str
+    POSTGRES_HOST: str
+    POSTGRES_PORT: str
+
     GRPC_HOST: str
     GRPC_PORT: int
 
@@ -19,6 +25,10 @@ class Settings(BaseSettings):
     @property
     def GRPC_ENDPOINT(self) -> str:
         return f"{self.GRPC_HOST}:{self.GRPC_PORT}"
+
+    @property
+    def ASYNC_DB_URL(self):
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
 
     model_config = SettingsConfigDict(env_file=".env")
 

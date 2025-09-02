@@ -3,6 +3,7 @@ from collections import OrderedDict
 
 import grpc
 import structlog
+
 from libs.event import event_pb2_grpc
 
 logger = structlog.get_logger(__name__)
@@ -86,7 +87,7 @@ class GrpcConnectionPool:
             return event_pb2_grpc.EventServiceStub(channel)
 
     async def close_connection(self, endpoint: str):
-        """Manually close a specific connection (useful for testing/debugging)."""
+        """Manually close a specific connection"""
         async with self._lock:
             if endpoint in self._channels:
                 try:
