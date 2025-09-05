@@ -1,0 +1,29 @@
+FROM python:3.12.4-slim AS base
+
+WORKDIR /app
+
+# Install build deps and runtime libs (psycopg2/asyncpg need libpq-dev, etc.)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy and install shared libs first (caches better)
+COPY ./libs /app/libs
+RUN pip install --no-cache-dir /app/libs
+
+# Copy service code and requirements
+COPY ./ws_gateway /app
+COPY ./ws_gateway/requirements.txt /app/requirements.txt
+
+# Install service requirements
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Create non-root user and switch
+RUN useradd -m appuser
+USER appuser
+
+EXPOSE 8000
+
+# Run without --reload in prod; tune workers if needed
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

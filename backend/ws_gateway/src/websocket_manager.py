@@ -99,6 +99,7 @@ class WebsocketManager:
         del self.clients[client_id]
         self.user_mapping.remove_user_from_channels(client_id)
         await self.redis_manager.delete_user_grpc_endpoint(client_id)
+        logger.info(f"Client {client_id} disconnected")
 
     def get_client_socket(self, client_id: str) -> WebSocket:
         """

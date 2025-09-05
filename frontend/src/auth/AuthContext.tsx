@@ -43,10 +43,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const login = (token: string) => {
-    tokenCookies.set("token", token, { path: "/" });
+    const jwtPayload = jwtDecode<JWT>(token);
+    tokenCookies.set("token", token, {
+      path: "/",
+      expires: new Date(jwtPayload.exp * 1000),
+    });
     setIsAuthenticated(true);
     setToken(token);
-    const jwtPayload = jwtDecode<JWT>(token);
+
     const user = {
       id: jwtPayload.id,
       username: jwtPayload.name,
@@ -54,7 +58,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       exp: jwtPayload.exp,
     };
     setUser(user);
-    userCookies.set("user", user, { path: "/" });
+    userCookies.set("user", user, {
+      path: "/",
+      expires: new Date(jwtPayload.exp * 1000),
+    });
   };
 
   const logout = () => {

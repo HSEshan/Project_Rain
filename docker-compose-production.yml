@@ -1,0 +1,120 @@
+name: project-rain-production
+services:
+  caddy:
+    image: caddy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - frontend_build:/usr/share/caddy:ro # serve static files
+    depends_on:
+      - frontend
+      - rest_api
+      - ws_gateway
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    env_file:
+      - ./frontend/production.env
+    volumes:
+      - frontend_build:/app/dist # put build output into named volume
+    restart: "no"
+
+  rest_api:
+    build:
+      context: ./backend
+      dockerfile: rest_api/Dockerfile.prod
+    env_file:
+      - ./backend/rest_api/production.env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
+    expose:
+      - "8000"
+    depends_on:
+      - postgres
+      - redis
+    restart: unless-stopped
+
+  ws_gateway:
+    build:
+      context: ./backend
+      dockerfile: ws_gateway/Dockerfile.prod
+    env_file:
+      - ./backend/ws_gateway/production.env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_FORMAT=json
+      - LOG_LEVEL=INFO
+      - GRPC_HOST=ws_gateway
+    expose:
+      - "8000"
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  event_consumer:
+    build:
+      context: ./backend
+      dockerfile: event_consumer/Dockerfile.prod
+    env_file:
+      - ./backend/event_consumer/production.env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_FORMAT=json
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  lease_manager:
+    build:
+      context: ./backend
+      dockerfile: lease_manager/Dockerfile.prod
+    environment:
+      - ENVIRONMENT=production
+      - LOG_FORMAT=json
+      - LOG_LEVEL=INFO
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=superuser
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=proddb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "superuser", "-d", "proddb"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+volumes:
+  frontend_build:
+  postgres_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
