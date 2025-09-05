@@ -22,6 +22,8 @@ services:
       dockerfile: Dockerfile.prod
     env_file:
       - ./frontend/production.env
+    environment:
+      - ENVIRONMENT=production
     volumes:
       - frontend_build:/app/dist # put build output into named volume
     restart: "no"
