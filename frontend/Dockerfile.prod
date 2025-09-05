@@ -1,0 +1,21 @@
+# ---- Build stage ----
+    FROM node:20-alpine AS builder
+
+    WORKDIR /app
+    
+    # Install dependencies
+    COPY package.json package-lock.json ./
+    RUN npm ci
+    
+    # Copy source and build
+    COPY . .
+    RUN npm run build
+    
+    # ---- Runtime stage ----
+    FROM alpine:3.19 AS runtime
+    
+    # Copy built files to /usr/share/caddy (same path Caddy will serve)
+    COPY --from=builder /app/dist /usr/share/caddy
+    
+    # Dummy command to keep container alive (optional)
+    CMD ["sh", "-c", "echo 'Frontend build ready'; sleep infinity"]

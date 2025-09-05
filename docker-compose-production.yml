@@ -7,10 +7,11 @@ services:
     - "443:443"
   volumes:
     - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-    - caddy_data:/data # TLS certificates persist here
-    - caddy_config:/config # Caddy config persists
-    - ./frontend/dist:/usr/share/caddy:ro # serve latest build directly
+    - caddy_data:/data
+    - caddy_config:/config
+    - frontend_build:/usr/share/caddy:ro # Caddy reads the build
   depends_on:
+    - frontend
     - rest_api
     - ws_gateway
   restart: unless-stopped
