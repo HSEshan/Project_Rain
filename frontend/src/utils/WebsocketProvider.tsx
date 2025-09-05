@@ -46,9 +46,9 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       return;
     }
 
-    const wsHost = import.meta.env.VITE_HOST;
-
-    const newWs = new WebSocket(`ws://${wsHost}:8000/ws?token=${token}`);
+    const protocol = window.location.protocol === "https:" ? "wss" : "ws";
+    const host = window.location.host;
+    const newWs = new WebSocket(`${protocol}://${host}/ws?token=${token}`);
 
     newWs.onopen = () => {
       console.log("✅ WebSocket connected");
