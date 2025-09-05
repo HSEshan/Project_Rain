@@ -19,7 +19,7 @@ import AppInitializer from "./utils/AppInitializer";
 
 function MainLayout() {
   return (
-    <div className="flex h-screen">
+    <div className="flex h-screen bg-gray-800">
       <AppInitializer />
       <WebSocketProvider>
         <Sidebar />

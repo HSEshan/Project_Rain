@@ -1,6 +1,13 @@
 import os
 from dataclasses import dataclass
 
+from dotenv import load_dotenv
+
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
+
+if ENVIRONMENT == "production":
+    load_dotenv("production.env")
+
 
 @dataclass
 class Config:

@@ -3,8 +3,10 @@ import { Cookies } from "react-cookie";
 
 const cookies = new Cookies();
 
+const apiHost = import.meta.env.VITE_HOST;
+
 const apiClient = axios.create({
-  baseURL: "http://localhost:8000/api",
+  baseURL: `http://${apiHost}:8000/api`,
   headers: {
     "Content-Type": "application/json",
   },

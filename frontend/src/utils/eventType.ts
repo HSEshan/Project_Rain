@@ -12,5 +12,5 @@ export type EventPayload = {
   receiver_id: string;
   text: string;
   metadata?: Record<string, unknown>;
-  timestamp: string;
+  timestamp: string; // ISO 8601 format
 };
