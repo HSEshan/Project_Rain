@@ -25,7 +25,7 @@ services:
     environment:
       - ENVIRONMENT=production
     volumes:
-      - frontend_build:/app/dist # put build output into named volume
+      - frontend_build:/build # put build output into named volume
     restart: "no"
 
   rest_api:

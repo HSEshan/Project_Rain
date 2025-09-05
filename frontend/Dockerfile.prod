@@ -1,11 +1,24 @@
-FROM node:20-alpine AS build
+# ---- Build stage ----
+    FROM node:20-alpine AS builder
 
-WORKDIR /app
-
-# Install dependencies
-COPY package*.json ./
-RUN npm ci
-
-# Copy source and build
-COPY . .
-RUN npm run build   # outputs to /app/dist
+    WORKDIR /app
+    
+    # Install dependencies first (better caching)
+    COPY package.json package-lock.json ./
+    RUN npm ci
+    
+    # Copy source and build
+    COPY . .
+    RUN npm run build
+    
+    # ---- Runtime stage ----
+    FROM alpine:3.19
+    
+    # Create a mount point for the build volume
+    VOLUME ["/build"]
+    
+    # Copy built frontend from builder stage
+    COPY --from=builder /app/dist /build
+    
+    # Just sleep (this container only exists to populate the volume)
+    CMD ["sh", "-c", "echo 'Frontend build ready in /build'; sleep infinity"]
