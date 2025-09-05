@@ -27,8 +27,9 @@ async def startup_event():
             )
             retries -= 1
             await asyncio.sleep(2)
-    if retries == 0:
-        raise Exception("Database connection failed")
+            if retries == 0:
+                raise e
+                break
 
     async with engine.begin() as conn:
         logger.info("Creating Tables...")
