@@ -85,7 +85,7 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
 
 eventBus.on(EventType.MESSAGE, (event: EventPayload) => {
   const currentDmId = window.location.pathname.split("/").pop() ?? "";
-  const isUnread = currentDmId === event.receiver_id;
+  const isUnread = currentDmId !== event.receiver_id;
   useMessageStore.getState().addMessage(
     {
       id: event.event_id,

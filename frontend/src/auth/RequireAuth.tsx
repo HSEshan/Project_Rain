@@ -8,5 +8,5 @@ export default function RequireAuth() {
     return <div className="text-white p-4">Loading...</div>; // or a spinner
   }
 
-  return isAuthenticated ? <Outlet /> : <Navigate to="/auth" />;
+  return isAuthenticated ? <Outlet /> : <Navigate to="/login" />;
 }

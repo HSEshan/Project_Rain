@@ -10,9 +10,6 @@ import { useAuth } from "../auth/AuthContext";
 function MessageItem({ message }: { message: Message }) {
   const { getUser } = useAuth();
   const user = getUser();
-  useEffect(() => {
-    console.log(user);
-  }, [user]);
   return (
     <div
       className={`bg-white text-black p-3 rounded-lg shadow-sm border border-gray-200 mb-3 w-2/3 ${
@@ -40,10 +37,18 @@ export function MessageView() {
   const { getWs } = useWebSocket();
   const ws = getWs();
   const messageRef = useRef<HTMLTextAreaElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     removeUnRead(dmId ?? "");
   }, [dmId]);
+
+  useEffect(() => {
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop =
+        messagesContainerRef.current.scrollHeight;
+    }
+  }, [messages]);
 
   const sendMessage = () => {
     if (!ws) {
@@ -86,8 +91,11 @@ export function MessageView() {
         <div className="text-gray-500 text-center py-8">Loading...</div>
       ) : (
         <>
-          {/* Messages container with proper scrolling */}
-          <div className="flex-1 overflow-y-auto mb-5 flex flex-col space-y-2">
+          {/* Messages container auto scroll to bottom */}
+          <div
+            className="flex-1 overflow-y-auto mb-5 flex flex-col space-y-2"
+            ref={messagesContainerRef}
+          >
             {messages.length === 0 ? (
               <div className="text-gray-500 text-center py-8">
                 No messages yet. Start the conversation!

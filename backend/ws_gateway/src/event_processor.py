@@ -80,7 +80,6 @@ class EventProcessor:
 
         if not receiver_ids:
             logger.debug(f"No receiver ids found for event: {event}")
-            logger.debug(f"Mapping: {self.websocket_manager.user_mapping}")
             return
 
         event_json = event.model_dump(mode="json")

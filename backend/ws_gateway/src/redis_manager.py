@@ -139,5 +139,4 @@ class RedisManager:
             )
             result = await session.execute(sql, {"user_id": user_id})
             rows = result.fetchall()
-            print([row[0] for row in rows])
-            return [row[0] for row in rows]
+            return [str(row[0]) for row in rows]

@@ -27,6 +27,7 @@ interface AuthContextType {
   logout: () => void;
   getToken: () => string | null;
   getUser: () => User | null;
+  initialize: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -38,12 +39,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const token = tokenCookies.get("token");
-    const user = userCookies.get("user");
-    setIsAuthenticated(!!token);
-    setToken(token);
-    setUser(user);
-    setIsLoading(false);
+    initialize();
   }, []);
 
   const login = (token: string) => {
@@ -77,6 +73,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return user;
   };
 
+  const initialize = () => {
+    const token = tokenCookies.get("token");
+    if (!token) {
+      logout();
+      setIsLoading(false);
+      return;
+    }
+    const jwtPayload = jwtDecode<JWT>(token);
+    if (jwtPayload.exp < Date.now() / 1000) {
+      logout();
+      setIsLoading(false);
+      return;
+    }
+    const user = userCookies.get("user");
+    setIsAuthenticated(!!token);
+    setToken(token);
+    setUser(user);
+    setIsLoading(false);
+  };
+
   const values = {
     isAuthenticated,
     isLoading,
@@ -84,6 +100,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     logout,
     getToken,
     getUser,
+    initialize,
   };
 
   return <AuthContext.Provider value={values}>{children}</AuthContext.Provider>;

@@ -3,11 +3,11 @@ import { useMessageStore } from "./messageStore";
 import { useEffect } from "react";
 
 export function MessageSidebar() {
-  const { channels, unReads } = useMessageStore();
+  const { channels, unReads, removeUnRead } = useMessageStore();
   const { dmId } = useParams<{ dmId: string }>();
 
   useEffect(() => {
-    console.log(channels);
+    removeUnRead(dmId ?? "");
   }, [channels]);
 
   return (
