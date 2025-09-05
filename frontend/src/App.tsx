@@ -1,17 +1,60 @@
-import { BrowserRouter } from "react-router-dom";
-import AppRoutes from "./routes/AppRoutes";
-import { AuthProvider } from "./auth/AuthContext";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Outlet,
+  Navigate,
+} from "react-router-dom";
+import { MessageLayout } from "./messages/MessageLayout";
+import { MessageView } from "./messages/MessageView";
+// import { GuildLayout } from "./guilds/GuildLayout";
+// import { GuildView } from "./guilds/GuildView";
 
-function App() {
+import AuthPage from "./auth/AuthPage";
+import RequireAuth from "./auth/RequireAuth";
+import { AuthProvider } from "./auth/AuthContext";
+import { WebSocketProvider } from "./utils/WebsocketProvider";
+import { Sidebar } from "./sidebar/Sidebar";
+import AppInitializer from "./utils/AppInitializer";
+
+function MainLayout() {
   return (
-    <BrowserRouter>
-      <div style={{ flexGrow: 1, backgroundColor: "#313338" }}>
-        <AuthProvider>
-          <AppRoutes />
-        </AuthProvider>
-      </div>
-    </BrowserRouter>
+    <div className="flex h-screen">
+      <AppInitializer />
+      <WebSocketProvider>
+        <Sidebar />
+
+        <Outlet />
+      </WebSocketProvider>
+    </div>
   );
 }
+export default function App() {
+  return (
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<AuthPage />} />
+          <Route path="/" element={<Navigate to="/login" replace />} />
 
-export default App;
+          <Route element={<RequireAuth />}>
+            <Route path="/home" element={<MainLayout />} />
+            <Route path="/dm" element={<MainLayout />}>
+              <Route index element={<MessageLayout />} />
+              <Route path=":dmId" element={<MessageLayout />}>
+                <Route index element={<MessageView />} />
+              </Route>
+            </Route>
+            {/* <Route path="/guild" element={<MainLayout />}>
+            <Route index element={<GuildLayout />} />
+            <Route path=":guildId" element={<GuildLayout />}>
+              <Route index element={<GuildView />} />
+              <Route path="channel/:channelId" element={<GuildView />} />
+            </Route>
+          </Route> */}
+          </Route>
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
+  );
+}

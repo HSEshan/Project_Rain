@@ -15,7 +15,6 @@ class EventService(event_pb2_grpc.EventServiceServicer):
         logger.debug(f"Received event: {event}")
 
         await event_processor.send_event_to_clients(event)
-        logger.debug("Event sent to processor")
         return event_pb2.Ack(success=True, message="Delivered")
 
 

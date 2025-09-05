@@ -4,13 +4,12 @@ from time import time
 from typing import Dict, List
 
 import structlog
+from libs.event.schema import Event
+from libs.logging import bind_event_context
 from src.core.config import settings
 from src.redis_manager import RedisManager
 from src.services.event_dispatcher import EventDispatcher
 from src.websocket_manager import WebsocketManager
-
-from libs.event.schema import Event
-from libs.logging import bind_event_context
 
 logger = structlog.get_logger()
 
@@ -32,6 +31,7 @@ class EventProcessor:
 
     def set_redis_manager(self, redis_manager: RedisManager):
         self.redis_manager = redis_manager
+        self.event_dispatcher.set_redis_manager(redis_manager)
 
     async def start_batch_processor(self):
         self._batch_task = asyncio.create_task(self._run_batch_loop())
@@ -79,6 +79,8 @@ class EventProcessor:
         )
 
         if not receiver_ids:
+            logger.debug(f"No receiver ids found for event: {event}")
+            logger.debug(f"Mapping: {self.websocket_manager.user_mapping}")
             return
 
         event_json = event.model_dump(mode="json")
@@ -92,9 +94,7 @@ class EventProcessor:
 
         success = sum(1 for result in results if result is None)
 
-        logger.debug(
-            f"Sent {event} to {receiver_ids} - {success} / {len(receiver_ids)} successful"
-        )
+        logger.debug(f"Sends {success} / {len(receiver_ids)} successful")
 
     def _compute_shard_id(
         self, receiver_id: str, num_shards: int = settings.NUM_SHARDS

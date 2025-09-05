@@ -6,7 +6,9 @@ from libs.event.codec import EventCodec
 from libs.event.schema import Event
 from libs.rediskeys import RediKeys
 from redis.asyncio import Redis
+from sqlalchemy import text
 from src.core.config import settings
+from src.database.config import AsyncSessionLocal
 
 logger = structlog.get_logger()
 
@@ -91,8 +93,9 @@ class RedisManager:
             return decoded
 
         channel_ids = await self.query_user_channels_from_db(user_id)
-        await self.cache_user_channel_ids(user_id, channel_ids)
-        logger.info(f"Cached DB channels for {user_id}: {channel_ids}")
+        if channel_ids:
+            await self.cache_user_channel_ids(user_id, channel_ids)
+            logger.info(f"Cached DB channels for {user_id}: {channel_ids}")
         return channel_ids
 
     async def cache_user_channel_ids(
@@ -126,10 +129,15 @@ class RedisManager:
         await pipe.execute()
 
     async def query_user_channels_from_db(self, user_id: str) -> List[str]:
-        """
-        Mock function to simulate a database lookup.
-        In production, replace this with your actual DB call.
-        """
-        # Replace with ORM call like:
-        # return await db.get_user_channels(user_id)
-        return ["c1a1e8c8-7abb-489f-88ec-66f5476c6a10"]  # Placeholder
+        async with AsyncSessionLocal() as session:
+            sql = text(
+                """
+            SELECT channel_id
+            FROM channel_members
+            WHERE user_id = :user_id
+            """
+            )
+            result = await session.execute(sql, {"user_id": user_id})
+            rows = result.fetchall()
+            print([row[0] for row in rows])
+            return [row[0] for row in rows]

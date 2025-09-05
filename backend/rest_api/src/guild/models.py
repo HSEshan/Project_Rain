@@ -5,6 +5,7 @@ from sqlalchemy import UUID, DateTime
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
+from src.channel.models import Channel, ChannelMember
 from src.database.core import Base
 from src.utils.default import generate_id
 

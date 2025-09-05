@@ -27,13 +27,16 @@ export default function LoginForm() {
           },
         }
       );
+      console.log(res);
       login(res.data.access_token); // Save token in cookie
       navigate("/home");
     } catch (err: unknown) {
       if (err instanceof Error) {
         setError("Invalid credentials: " + err.message);
+        console.error(err);
       } else {
         setError("An unknown error occurred");
+        console.error(err);
       }
     }
   };

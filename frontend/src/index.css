@@ -1,22 +1,3 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-body {
-  font-family: sans-serif;
-  background-color: #1e1f22;
-  color: white;
-  height: 100vh;
-  overflow: hidden;
-}
-
-#root {
-  display: flex;
-  height: 100%;
-}

@@ -16,7 +16,7 @@ oauth2_bearer = OAuth2PasswordBearer(tokenUrl="api/auth/login")
 
 
 async def create_access_token(
-    id: str, email: str, name: str, expires_delta: timedelta = timedelta(minutes=30)
+    id: str, email: str, name: str, expires_delta: timedelta = timedelta(minutes=300)
 ) -> Token:
     encode = {"sub": email, "id": id, "name": name}
     expire_time = datetime.now(timezone.utc) + expires_delta

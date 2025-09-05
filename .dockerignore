@@ -42,3 +42,6 @@ dist/
 # Docker
 .dockerignore
 docker-compose.override.yml
+
+# Node
+node_modules/

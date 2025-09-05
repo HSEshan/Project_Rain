@@ -1,12 +1,9 @@
-import hashlib
 from collections import defaultdict
 from datetime import datetime, timezone
 
 import structlog
 from fastapi import WebSocket
-from libs.event.schema import Event
 from src.auth import CurrentUser
-from src.core.config import settings
 from src.redis_manager import RedisManager
 
 logger = structlog.get_logger()

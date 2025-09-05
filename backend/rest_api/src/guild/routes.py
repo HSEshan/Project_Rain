@@ -11,7 +11,7 @@ async def get_user_guilds(
     user: user_dependency,
     guild_service: GuildService = Depends(get_guild_service),
 ):
-    return await guild_service.get_user_guild_ids(user)
+    return await guild_service.get_user_guilds(user)
 
 
 @router.get("/{guild_id}", status_code=status.HTTP_200_OK)

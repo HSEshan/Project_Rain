@@ -46,11 +46,15 @@ class GuildService(BaseService):
 
         return new_guild
 
-    async def get_user_guild_ids(self, user: CurrentUser) -> list[Guild]:
-        user_guild_relations = await self.db.execute(
-            select(GuildMember.guild_id).where(GuildMember.user_id == user.id)
+    async def get_user_guilds(self, user: CurrentUser) -> list[Guild]:
+        user_guilds = await self.db.execute(
+            select(Guild).where(
+                Guild.id.in_(
+                    select(GuildMember.guild_id).where(GuildMember.user_id == user.id)
+                )
+            )
         )
-        return user_guild_relations.scalars().all()
+        return user_guilds.scalars().all()
 
     async def get_guild_by_id(self, guild_id: str) -> Guild:
         guild = await self.db.execute(select(Guild).where(Guild.id == guild_id))
@@ -63,9 +67,8 @@ class GuildService(BaseService):
         self, user: CurrentUser, user_to_invite: str, guild_id: str
     ) -> GuildInvite:
         async with self.db.begin():
-            guild = await self.db.execute(select(Guild).where(Guild.id == guild_id))
-            result = guild.scalar_one_or_none()
-            if not result:
+            guild = await self.get_guild_by_id(guild_id)
+            if not guild:
                 raise NotFoundException(f"Guild with id {guild_id} not found")
 
             guild_member = await self.db.execute(
@@ -141,6 +144,12 @@ class GuildService(BaseService):
             self.db.delete(result)
             await self.db.flush()
         return True
+
+    async def get_guild_members(self, guild_id: str) -> list[GuildMember]:
+        guild_members = await self.db.execute(
+            select(GuildMember).where(GuildMember.guild_id == guild_id)
+        )
+        return guild_members.scalars().all()
 
 
 def get_guild_service(db: AsyncSession = Depends(get_db)):
