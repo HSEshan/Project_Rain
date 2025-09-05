@@ -1,28 +1,43 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import apiClient from "../utils/apiClient";
+import apiClient from "../utils/apiClientBase";
 import { useAuth } from "../auth/AuthContext";
 
 export default function LoginForm() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({ login: "", password: "" });
-  const [error, setError] = useState("");
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-    setError("");
-  };
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await apiClient.post("/auth/login", formData);
+      const res = await apiClient.post(
+        "/auth/login",
+        new URLSearchParams({
+          username: usernameRef.current?.value || "",
+          password: passwordRef.current?.value || "",
+        }),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        }
+      );
+      console.log(res);
       login(res.data.access_token); // Save token in cookie
       navigate("/home");
-    } catch (err: any) {
-      setError("Invalid credentials");
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError("Invalid credentials: " + err.message);
+        console.error(err);
+      } else {
+        setError("An unknown error occurred");
+        console.error(err);
+      }
     }
   };
 
@@ -31,18 +46,16 @@ export default function LoginForm() {
       <h2 className="text-2xl font-semibold text-center mb-4">Log in</h2>
       <input
         type="text"
-        name="login"
+        name="username"
         placeholder="Username or Email"
-        value={formData.login}
-        onChange={handleChange}
+        ref={usernameRef}
         className="w-full p-2 bg-gray-700 text-white rounded"
       />
       <input
         type="password"
         name="password"
         placeholder="Password"
-        value={formData.password}
-        onChange={handleChange}
+        ref={passwordRef}
         className="w-full p-2 bg-gray-700 text-white rounded"
       />
       {error && <p className="text-red-400 text-sm">{error}</p>}

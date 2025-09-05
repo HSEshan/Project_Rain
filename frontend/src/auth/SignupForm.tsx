@@ -1,26 +1,18 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import apiClient from "../utils/apiClient";
+import apiClient from "../utils/apiClientBase";
 import { useAuth } from "../auth/AuthContext";
 
 export default function SignupForm() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const [formData, setFormData] = useState({
-    username: "",
-    email: "",
-    password: "",
-  });
+  const usernameRef = useRef<HTMLInputElement>(null);
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
   const [generalError, setGeneralError] = useState("");
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-    setErrors((prev) => ({ ...prev, [e.target.name]: "" }));
-    setGeneralError("");
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,29 +20,28 @@ export default function SignupForm() {
     setGeneralError("");
 
     try {
-      const res = await apiClient.post("/auth/register", formData);
-
-      // Optionally: auto-login after successful signup
-      const loginRes = await apiClient.post("/auth/login", {
-        login: formData.username,
-        password: formData.password,
-      });
-
-      login(loginRes.data.access_token);
-      navigate("/dashboard");
-    } catch (err: any) {
-      if (err.response?.status === 422) {
-        const fieldErrors: { [key: string]: string } = {};
-        for (const detail of err.response.data.detail) {
-          const field = detail.loc?.[1];
-          const msg = detail.msg;
-          if (field) {
-            fieldErrors[field] = msg;
-          }
-        }
-        setErrors(fieldErrors);
+      const formData = new URLSearchParams();
+      formData.append("username", usernameRef.current?.value || "");
+      formData.append("email", emailRef.current?.value || "");
+      formData.append("password", passwordRef.current?.value || "");
+      await apiClient
+        .post("/auth/register", formData, {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+        })
+        .then((res) => {
+          login(res.data.access_token);
+          navigate("/home");
+        })
+        .catch((err) => {
+          setErrors({ username: "Invalid credentials: " + err.response.data });
+        });
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setErrors({ username: "Invalid credentials: " + err.message });
       } else {
-        setGeneralError("Signup failed. Please try again.");
+        setErrors({ username: "An unknown error occurred" });
       }
     }
   };
@@ -63,8 +54,7 @@ export default function SignupForm() {
         type="text"
         name="username"
         placeholder="Username"
-        value={formData.username}
-        onChange={handleChange}
+        ref={usernameRef}
         className="w-full p-2 bg-gray-700 text-white rounded"
       />
       {errors.username && (
@@ -75,8 +65,7 @@ export default function SignupForm() {
         type="email"
         name="email"
         placeholder="Email"
-        value={formData.email}
-        onChange={handleChange}
+        ref={emailRef}
         className="w-full p-2 bg-gray-700 text-white rounded"
       />
       {errors.email && <p className="text-red-400 text-sm">{errors.email}</p>}
@@ -85,8 +74,7 @@ export default function SignupForm() {
         type="password"
         name="password"
         placeholder="Password"
-        value={formData.password}
-        onChange={handleChange}
+        ref={passwordRef}
         className="w-full p-2 bg-gray-700 text-white rounded"
       />
       {errors.password && (

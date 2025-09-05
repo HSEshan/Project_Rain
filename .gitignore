@@ -17,7 +17,7 @@ env/
 *.ini
 *.pem
 
-# If using migrations (like Alembic)
+# Alembic
 alembic/versions/*.pyc
 
 # ---- Node / React ----
@@ -63,3 +63,11 @@ logs/
 
 # ---- Others ----
 *.orig
+dev_notes.txt
+generate_tree.py
+tree.txt
+stress_test.py
+
+#logs
+loki/
+promtail/

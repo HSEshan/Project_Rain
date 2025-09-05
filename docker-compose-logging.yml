@@ -1,0 +1,149 @@
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+
+  postgres:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=superuser
+      - POSTGRES_PASSWORD=superuser1
+      - POSTGRES_DB=devdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "superuser", "-d", "devdb"]
+      interval: 2s
+      timeout: 1s
+      retries: 10
+
+  rest_api:
+    build:
+      context: ./backend
+      dockerfile: rest_api/Dockerfile
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+    env_file:
+      - ./backend/rest_api/development.env
+    environment:
+      - ENVIRONMENT=development
+      - LOG_FORMAT=json
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend/rest_api:/app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  ws_gateway:
+    build:
+      context: ./backend
+      dockerfile: ws_gateway/Dockerfile
+    ports:
+      - "8001:8000"
+    depends_on:
+      - redis
+    env_file:
+      - ./backend/ws_gateway/development.env
+    environment:
+      - ENVIRONMENT=development
+      - GRPC_HOST=ws_gateway
+      - LOG_FORMAT=json
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend/ws_gateway:/app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  event_consumer:
+    build:
+      context: ./backend
+      dockerfile: event_consumer/Dockerfile
+    depends_on:
+      - redis
+    environment:
+      - ENVIRONMENT=development
+      - LOG_FORMAT=json
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend/event_consumer:/app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  lease_manager:
+    build:
+      context: ./backend
+      dockerfile: lease_manager/Dockerfile
+    depends_on:
+      - redis
+    environment:
+      - ENVIRONMENT=development
+      - LOG_FORMAT=json
+      - LOG_LEVEL=DEBUG
+    volumes:
+      - ./backend/lease_manager:/app
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  grafana:
+    image: grafana/grafana:10.0.3
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - loki
+
+  loki:
+    image: grafana/loki:2.9.2
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki:/var/loki
+      - ./loki/loki-config.yaml:/etc/loki/loki-config.yaml
+    command: -config.file=/etc/loki/loki-config.yaml
+
+  promtail:
+    image: grafana/promtail:2.9.2
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail:/etc/promtail
+    command: -config.file=/etc/promtail/promtail-config.yaml
+    depends_on:
+      - loki
+
+volumes:
+  postgres_data:
+  grafana_data:

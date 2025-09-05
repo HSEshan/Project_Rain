@@ -3,8 +3,6 @@ import MainLayout from "../layouts/MainLayout";
 import HomeLayout from "../pages/Home/HomeLayout";
 import WhatsNew from "../pages/Home/WhatsNew";
 import Trending from "../pages/Home/Trending";
-import Friends from "../pages/Friends";
-import Settings from "../pages/Settings";
 import AuthPage from "../auth/AuthPage";
 import RequireAuth from "../auth/RequireAuth";
 
@@ -21,8 +19,6 @@ export default function AppRoutes() {
             <Route index element={<WhatsNew />} />
             <Route path="trending" element={<Trending />} />
           </Route>
-          <Route path="/friends" element={<Friends />} />
-          <Route path="/settings" element={<Settings />} />
         </Route>
       </Route>
     </Routes>
