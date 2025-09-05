@@ -10,6 +10,7 @@ logger = structlog.get_logger()
 
 async def startup_event():
     # Check database connection first
+    logger.debug(settings)
     retries = 5
     while retries > 0:
         try:
