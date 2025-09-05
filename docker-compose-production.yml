@@ -1,32 +1,19 @@
 name: project-rain-production
 services:
   caddy:
-    image: caddy:2.8
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-      - frontend_build:/usr/share/caddy:ro # serve static files
-    depends_on:
-      - frontend
-      - rest_api
-      - ws_gateway
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
-    env_file:
-      - ./frontend/production.env
-    environment:
-      - ENVIRONMENT=production
-    volumes:
-      - frontend_build:/build # put build output into named volume
-    restart: "no"
+  image: caddy:2.8
+  ports:
+    - "80:80"
+    - "443:443"
+  volumes:
+    - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+    - caddy_data:/data # TLS certificates persist here
+    - caddy_config:/config # Caddy config persists
+    - ./frontend/dist:/usr/share/caddy:ro # serve latest build directly
+  depends_on:
+    - rest_api
+    - ws_gateway
+  restart: unless-stopped
 
   rest_api:
     build:
