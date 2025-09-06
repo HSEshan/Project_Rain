@@ -19,31 +19,32 @@ export default function SignupForm() {
     setErrors({});
     setGeneralError("");
 
-    try {
-      const formData = new URLSearchParams();
-      formData.append("username", usernameRef.current?.value || "");
-      formData.append("email", emailRef.current?.value || "");
-      formData.append("password", passwordRef.current?.value || "");
-      await apiClient
-        .post("/auth/register", formData, {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
-        })
-        .then((res) => {
-          login(res.data.access_token);
-          navigate("/home");
-        })
-        .catch((err) => {
-          setErrors({ username: "Invalid credentials: " + err.response.data });
-        });
-    } catch (err: unknown) {
-      if (err instanceof Error) {
+    //   @router.post(
+    //     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+    // )
+    // async def register_user(
+    //     user: UserCreate, service: AuthService = Depends(get_auth_service)
+    // ):
+    //     return await service.register_user(user)
+
+    const formData = {
+      username: usernameRef.current?.value || "",
+      email: emailRef.current?.value || "",
+      password: passwordRef.current?.value || "",
+    };
+    await apiClient
+      .post("/auth/register", formData, {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+      .then((res) => {
+        login(res.data.access_token);
+        navigate("/home");
+      })
+      .catch((err) => {
         setErrors({ username: "Invalid credentials: " + err.message });
-      } else {
-        setErrors({ username: "An unknown error occurred" });
-      }
-    }
+      });
   };
 
   return (
