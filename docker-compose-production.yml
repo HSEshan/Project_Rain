@@ -1,91 +1,20 @@
-name: project-rain-production
+name: project-rain
+
 services:
-  caddy:
-    image: caddy:2.8
-    ports:
-      - "80:80"
-      - "443:443"
+  redis:
+    image: redis:7
+    restart: unless-stopped
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-      - frontend_build:/usr/share/caddy:ro # Caddy reads the build
-    depends_on:
-      - frontend
-      - rest_api
-      - ws_gateway
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.prod
-    volumes:
-      - frontend_build:/usr/share/caddy # populate the volume during build
-    restart: "no"
-
-  rest_api:
-    build:
-      context: ./backend
-      dockerfile: rest_api/Dockerfile.prod
-    env_file:
-      - ./backend/rest_api/production.env
-    environment:
-      - ENVIRONMENT=production
-      - LOG_LEVEL=DEBUG
-      - LOG_FORMAT=json
-    expose:
-      - "8000"
-    depends_on:
-      - postgres
-      - redis
-    restart: unless-stopped
-
-  ws_gateway:
-    build:
-      context: ./backend
-      dockerfile: ws_gateway/Dockerfile.prod
-    env_file:
-      - ./backend/ws_gateway/production.env
-    environment:
-      - ENVIRONMENT=production
-      - LOG_FORMAT=json
-      - LOG_LEVEL=INFO
-      - GRPC_HOST=ws_gateway
-    expose:
-      - "8000"
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-  event_consumer:
-    build:
-      context: ./backend
-      dockerfile: event_consumer/Dockerfile.prod
-    env_file:
-      - ./backend/event_consumer/production.env
-    environment:
-      - ENVIRONMENT=production
-      - LOG_FORMAT=json
-      - LOG_LEVEL=INFO
-    depends_on:
-      - redis
-    restart: unless-stopped
-
-  lease_manager:
-    build:
-      context: ./backend
-      dockerfile: lease_manager/Dockerfile.prod
-    environment:
-      - ENVIRONMENT=production
-      - LOG_FORMAT=json
-      - LOG_LEVEL=INFO
-    depends_on:
-      - redis
-    restart: unless-stopped
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   postgres:
     image: postgres:16
+    restart: unless-stopped
     environment:
       - POSTGRES_USER=superuser
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -93,26 +22,89 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "superuser", "-d", "proddb"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-U",
+          "${POSTGRES_USER:-superuser}",
+          "-d",
+          "${POSTGRES_DB:-devdb}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rest_api:
+    build:
+      context: ./backend
+      dockerfile: rest_api/Dockerfile.prod
+    image: project-rest_api:prod
+    env_file:
+      - ./backend/rest_api/production.env
+    depends_on:
+      - redis
+      - postgres
     restart: unless-stopped
 
-  redis:
-    image: redis:7
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
+  ws_gateway:
+    build:
+      context: ./backend
+      dockerfile: ws_gateway/Dockerfile.prod
+    image: project-ws_gateway:prod
+    env_file:
+      - ./backend/ws_gateway/production.env
+    depends_on:
+      - redis
+      - postgres
     restart: unless-stopped
+
+  event_consumer:
+    build:
+      context: ./backend
+      dockerfile: event_consumer/Dockerfile.prod
+    image: project-event_consumer:prod
+    env_file:
+      - ./backend/event_consumer/production.env
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - postgres
+
+  lease_manager:
+    build:
+      context: ./backend
+      dockerfile: lease_manager/Dockerfile.prod
+    image: project-lease_manager:prod
+    env_file:
+      - ./backend/lease_manager/production.env
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - postgres
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    image: project-frontend:prod
+    restart: unless-stopped
+
+  # edge nginx: PUBLIC ENTRYPOINT
+  edge:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    depends_on:
+      - rest_api
+      - ws_gateway
+      - frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/edge.conf:/etc/nginx/conf.d/default.conf:ro
+    # (optional) if you want logs on host:
+    # - ./nginx/logs:/var/log/nginx
 
 volumes:
-  frontend_build:
   postgres_data:
   redis_data:
-  caddy_data:
-  caddy_config:
