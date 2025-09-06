@@ -20,7 +20,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[Any, None]:
 health_router = APIRouter(tags=["Health Check"])
 
 
-@health_router.get("/health", status_code=status.HTTP_200_OK)
+@health_router.get("/api/health", status_code=status.HTTP_200_OK)
 def read_root():
     return {"status": "OK"}
 
