@@ -42,6 +42,10 @@ services:
     image: project-rest_api:prod
     env_file:
       - ./backend/rest_api/production.env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
     depends_on:
       - redis
       - postgres
@@ -54,6 +58,10 @@ services:
     image: project-ws_gateway:prod
     env_file:
       - ./backend/ws_gateway/production.env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
     depends_on:
       - redis
       - postgres
@@ -66,6 +74,10 @@ services:
     image: project-event_consumer:prod
     env_file:
       - ./backend/event_consumer/production.env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
     restart: unless-stopped
     depends_on:
       - redis
@@ -76,8 +88,10 @@ services:
       context: ./backend
       dockerfile: lease_manager/Dockerfile.prod
     image: project-lease_manager:prod
-    env_file:
-      - ./backend/lease_manager/production.env
+    environment:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=INFO
+      - LOG_FORMAT=json
     restart: unless-stopped
     depends_on:
       - redis
