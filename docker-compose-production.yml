@@ -1,20 +1,28 @@
 name: project-rain-production
 services:
   caddy:
-  image: caddy:2.8
-  ports:
-    - "80:80"
-    - "443:443"
-  volumes:
-    - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-    - caddy_data:/data
-    - caddy_config:/config
-    - frontend_build:/usr/share/caddy:ro # Caddy reads the build
-  depends_on:
-    - frontend
-    - rest_api
-    - ws_gateway
-  restart: unless-stopped
+    image: caddy:2.8
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - frontend_build:/usr/share/caddy:ro # Caddy reads the build
+    depends_on:
+      - frontend
+      - rest_api
+      - ws_gateway
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    volumes:
+      - frontend_build:/usr/share/caddy # populate the volume during build
+    restart: "no"
 
   rest_api:
     build:
