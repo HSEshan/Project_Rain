@@ -20,13 +20,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[Any, None]:
 health_router = APIRouter(tags=["Health Check"])
 
 
-@health_router.get("/api/health", status_code=status.HTTP_200_OK)
+@health_router.get("/health", status_code=status.HTTP_200_OK)
 def read_root():
     return {"status": "OK"}
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(lifespan=lifespan, log_level="debug")
+    app = FastAPI(
+        lifespan=lifespan,
+        log_level="debug",
+        title="Project Rain API",
+        description="API for Project Rain",
+        version="0.5.0",
+        root_path="/api",
+    )
     app.include_router(health_router)
     app.include_router(master_router)
     app.add_middleware(

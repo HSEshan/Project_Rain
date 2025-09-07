@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import apiClient from "../utils/apiClientBase";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import { postLogin } from "./apiClient";
+import type { AxiosResponse } from "axios";
 
 export default function LoginForm() {
   const { login } = useAuth();
@@ -9,38 +10,25 @@ export default function LoginForm() {
 
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
-
+  const [searchParams] = useSearchParams();
   const [error, setError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      const res = await apiClient.post(
-        "/auth/login",
-        new URLSearchParams({
-          username: usernameRef.current?.value || "",
-          password: passwordRef.current?.value || "",
-        }),
-        {
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded",
-          },
+    await postLogin(
+      usernameRef.current?.value || "",
+      passwordRef.current?.value || ""
+    )
+      .then((res: AxiosResponse) => {
+        if (res.status === 200) {
+          login(res.data.access_token);
+          navigate("/home");
         }
-      );
-      console.log(res);
-      login(res.data.access_token); // Save token in cookie
-      navigate("/home");
-    } catch (err: unknown) {
-      if (err instanceof Error) {
-        setError("Invalid credentials: " + err.message);
-        console.error(err);
-      } else {
-        setError("An unknown error occurred");
-        console.error(err);
-      }
-    }
+      })
+      .catch((err: Error) => {
+        setError(err.message);
+      });
   };
-
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <h2 className="text-2xl font-semibold text-center mb-4">Log in</h2>
@@ -58,7 +46,10 @@ export default function LoginForm() {
         ref={passwordRef}
         className="w-full p-2 bg-gray-700 text-white rounded"
       />
-      {error && <p className="text-red-400 text-sm">{error}</p>}
+      {error && <p className="text-red-400 text-sm text-center">{error}</p>}
+      {searchParams.get("signup") && (
+        <p className="text-green-400 text-sm text-center">Signup successful</p>
+      )}
       <button
         type="submit"
         className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"

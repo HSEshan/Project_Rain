@@ -11,7 +11,7 @@ async def get_user_friends(
     user: user_dependency,
     friendship_service: FriendshipService = Depends(get_friendship_service),
 ):
-    return await friendship_service.get_user_friends(user)
+    return await friendship_service.get_user_friends(user.id)
 
 
 @router.post("/friends/request", status_code=status.HTTP_201_CREATED)

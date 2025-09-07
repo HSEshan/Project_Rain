@@ -8,7 +8,7 @@ export default function AuthPage() {
   return (
     <div className="min-h-screen bg-gray-900 text-white flex items-center justify-center p-4">
       <div className="bg-gray-800 p-8 rounded-xl w-full max-w-md shadow-xl">
-        {isLogin ? <LoginForm /> : <SignupForm />}
+        {isLogin ? <LoginForm /> : <SignupForm setIsLogin={setIsLogin} />}
         <button
           className="mt-6 w-full text-sm text-blue-400 hover:underline"
           onClick={() => setIsLogin((prev) => !prev)}

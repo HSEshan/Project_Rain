@@ -5,7 +5,7 @@ from src.friendship.routes import router as friendship_router
 from src.guild.routes import router as guild_router
 from src.message.routes import router as message_router
 
-master_router = APIRouter(prefix="/api")
+master_router = APIRouter()
 
 master_router.include_router(auth_router)
 master_router.include_router(guild_router)

@@ -1,10 +1,13 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import apiClient from "../utils/apiClientBase";
-import { useAuth } from "../auth/AuthContext";
+import { postSignup } from "./apiClient";
+import type { AxiosResponse } from "axios";
 
-export default function SignupForm() {
-  const { login } = useAuth();
+export default function SignupForm({
+  setIsLogin,
+}: {
+  setIsLogin: (isLogin: boolean) => void;
+}) {
   const navigate = useNavigate();
 
   const usernameRef = useRef<HTMLInputElement>(null);
@@ -12,38 +15,24 @@ export default function SignupForm() {
   const passwordRef = useRef<HTMLInputElement>(null);
 
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
-  const [generalError, setGeneralError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
-    setGeneralError("");
 
-    //   @router.post(
-    //     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
-    // )
-    // async def register_user(
-    //     user: UserCreate, service: AuthService = Depends(get_auth_service)
-    // ):
-    //     return await service.register_user(user)
-
-    const formData = {
-      username: usernameRef.current?.value || "",
-      email: emailRef.current?.value || "",
-      password: passwordRef.current?.value || "",
-    };
-    await apiClient
-      .post("/auth/register", formData, {
-        headers: {
-          "Content-Type": "application/json",
-        },
+    await postSignup(
+      usernameRef.current?.value || "",
+      emailRef.current?.value || "",
+      passwordRef.current?.value || ""
+    )
+      .then((res: AxiosResponse) => {
+        if (res.status === 201) {
+          navigate("/login?signup=true");
+          setIsLogin(true);
+        }
       })
-      .then((res) => {
-        login(res.data.access_token);
-        navigate("/home");
-      })
-      .catch((err) => {
-        setErrors({ username: "Invalid credentials: " + err.message });
+      .catch((err: Error) => {
+        setErrors({ "Signup failed": err.message });
       });
   };
 
@@ -82,7 +71,9 @@ export default function SignupForm() {
         <p className="text-red-400 text-sm">{errors.password}</p>
       )}
 
-      {generalError && <p className="text-red-400 text-sm">{generalError}</p>}
+      {errors["Signup failed"] && (
+        <p className="text-red-400 text-sm">{errors["Signup failed"]}</p>
+      )}
 
       <button
         type="submit"
