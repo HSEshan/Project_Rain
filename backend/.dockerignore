@@ -1,0 +1,52 @@
+# Byte-compiled / cached
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.env/
+venv/
+env/
+rest_api/venv
+ws_gateway/venv
+event_consumer/venv
+lease_manager/venv
+
+
+# env files
+*.env
+
+# Editor directories and project files
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs and temp files
+*.log
+*.tmp
+
+# Tests (optional)
+tests/
+*.test.py
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Git
+.git
+.gitignore
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Node
+node_modules/

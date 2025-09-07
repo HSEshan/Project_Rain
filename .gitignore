@@ -71,3 +71,7 @@ stress_test.py
 #logs
 loki/
 promtail/
+
+# ghcr
+ghcr_config.json
+image_publisher.ps1
