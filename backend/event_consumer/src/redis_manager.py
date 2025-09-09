@@ -66,8 +66,8 @@ class RedisManager:
             groupname=consumer_group,
             consumername=consumer_id,
             streams={stream_name: ">"},
-            count=100,
-            block=25,
+            count=config.redis_xread_count,
+            block=config.redis_xread_block,
         )
 
     async def get_grpc_endpoints_for_channel(self, channel_id: str) -> List[str]:
@@ -86,11 +86,6 @@ class RedisManager:
         if endpoint:
             return [endpoint.decode()]
         return None
-
-    async def acknowledge_message(
-        self, stream_name: str, consumer_group: str, message_id: str
-    ):
-        await self.redis.xack(stream_name, consumer_group, message_id)
 
     async def batch_ack_messages(
         self, stream_name: str, consumer_group: str, message_ids: List[str]

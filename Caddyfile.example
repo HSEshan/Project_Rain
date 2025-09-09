@@ -1,0 +1,33 @@
+yourdomain.com {
+    encode gzip
+
+    # --- API (HTTP) ---
+    handle_path /api/* {
+        reverse_proxy rest_api:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # --- WebSocket endpoint ---
+    handle_path /ws* {
+        reverse_proxy ws_gateway:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # --- Everything else -> frontend (SPA) ---
+    handle /* {
+        reverse_proxy frontend:80 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
