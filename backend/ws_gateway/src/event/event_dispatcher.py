@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.config import AsyncSessionLocal
 
 # from src.services.friend_request_event_dispatcher import FriendRequestEventDispatcher
-from src.services.message_event_dispatcher import MessageEventDispatcher
+from src.message.dispatcher import MessageEventDispatcher
 
 logger = structlog.get_logger()
 
@@ -16,7 +16,7 @@ logger = structlog.get_logger()
 class EventDispatcher:
     def __init__(self):
         self.redis_manager = None
-        self.session_factory = AsyncSessionLocal
+        self.session_factory: AsyncSession = AsyncSessionLocal
         self.message_event_dispatcher = MessageEventDispatcher()
         # self.friend_request_event_dispatcher = FriendRequestEventDispatcher()
 

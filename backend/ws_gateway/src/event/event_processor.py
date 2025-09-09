@@ -7,9 +7,9 @@ import structlog
 from libs.event.schema import Event
 from libs.logging import bind_event_context
 from src.core.config import settings
-from src.redis_manager import RedisManager
-from src.services.event_dispatcher import EventDispatcher
-from src.websocket_manager import WebsocketManager
+from src.event.event_dispatcher import EventDispatcher
+from src.redis.redis_manager import RedisManager
+from src.websocket.manager import WebsocketManager
 
 logger = structlog.get_logger()
 

@@ -2,9 +2,9 @@ import orjson
 import structlog
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from libs.event.schema import Event
-from src.auth import get_current_user_ws
-from src.event_processor import event_processor
-from src.websocket_manager import websocket_manager
+from src.auth.service import get_current_user_ws
+from src.event.event_processor import event_processor
+from src.websocket.manager import websocket_manager
 
 logger = structlog.get_logger()
 

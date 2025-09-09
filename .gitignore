@@ -75,3 +75,4 @@ promtail/
 # ghcr
 ghcr_config.json
 image_publisher.ps1
+Caddyfile

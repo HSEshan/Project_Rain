@@ -3,7 +3,7 @@ from grpc import aio
 from libs.event import event_pb2, event_pb2_grpc
 from libs.event.codec import EventCodec
 from libs.logging import bind_event_context
-from src.event_processor import event_processor
+from src.event.event_processor import event_processor
 
 logger = structlog.get_logger()
 
@@ -18,7 +18,7 @@ class EventService(event_pb2_grpc.EventServiceServicer):
         return event_pb2.Ack(success=True, message="Delivered")
 
 
-async def serve_async_grpc_server(port: int):
+async def serve_grpc_server(port: int):
     try:
         server = aio.server()
         event_pb2_grpc.add_EventServiceServicer_to_server(EventService(), server)

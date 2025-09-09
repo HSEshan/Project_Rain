@@ -1,20 +1,13 @@
 import structlog
 from fastapi import WebSocketException, status
 from jose import JWTError, jwt
-from pydantic import BaseModel
+from src.auth.models import CurrentUser
 from src.core.config import settings
 
 SECRET_KEY = settings.SECRET_KEY
 ALGORITHM = settings.ALGORITHM
 
 logger = structlog.get_logger()
-
-
-class CurrentUser(BaseModel):
-    email: str
-    name: str
-    id: str
-    exp: int
 
 
 async def get_current_user_ws(token: str) -> CurrentUser:
