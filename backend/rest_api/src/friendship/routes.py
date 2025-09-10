@@ -14,14 +14,22 @@ async def get_user_friends(
     return await friendship_service.get_user_friends(user.id)
 
 
+@router.get("/friends/request/me", status_code=status.HTTP_200_OK)
+async def get_user_friend_requests(
+    user: user_dependency,
+    friendship_service: FriendshipService = Depends(get_friendship_service),
+):
+    return await friendship_service.get_friend_requests_by_user_id(user.id)
+
+
 @router.post("/friends/request", status_code=status.HTTP_201_CREATED)
 async def create_friend_request(
     current_user: user_dependency,
-    to_user_id: str,
+    to_username: str,
     friendship_service: FriendshipService = Depends(get_friendship_service),
 ):
     return await friendship_service.create_friend_request(
-        FriendRequestCreate(from_user_id=current_user.id, to_user_id=to_user_id)
+        FriendRequestCreate(from_user_id=current_user.id, to_username=to_username)
     )
 
 
@@ -34,5 +42,18 @@ async def accept_friend_request(
     friendship_service: FriendshipService = Depends(get_friendship_service),
 ):
     return await friendship_service.accept_friend_request(
+        current_user.id, friend_request_id
+    )
+
+
+@router.post(
+    "/friends/request/{friend_request_id}/reject", status_code=status.HTTP_200_OK
+)
+async def reject_friend_request(
+    friend_request_id: str,
+    current_user: user_dependency,
+    friendship_service: FriendshipService = Depends(get_friendship_service),
+):
+    return await friendship_service.reject_friend_request(
         current_user.id, friend_request_id
     )

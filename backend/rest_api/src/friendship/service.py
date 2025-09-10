@@ -25,9 +25,12 @@ class FriendshipService(BaseService):
             self.db, friend_request_id
         )
 
-    async def accept_friend_request(
-        self, user_id: str, friend_request_id: str
-    ) -> FriendRequestAccept:
+    async def get_friend_requests_by_user_id(self, user_id: str) -> list[FriendRequest]:
+        return await FriendshipRepository.get_friend_requests_by_user_id(
+            self.db, user_id
+        )
+
+    async def accept_friend_request(self, user_id: str, friend_request_id: str) -> bool:
         async with self.db.begin():
             friendship = await FriendshipRepository.accept_friend_request(
                 self.db, user_id, friend_request_id
@@ -39,7 +42,12 @@ class FriendshipService(BaseService):
                     user_id2=str(friendship.user_2_id),
                 ),
             )
-        return FriendRequestAccept(friendship=friendship, dm_channel=dm_channel)
+        return True
+
+    async def reject_friend_request(self, user_id: str, friend_request_id: str) -> bool:
+        return await FriendshipRepository.reject_friend_request(
+            self.db, user_id, friend_request_id
+        )
 
     async def get_user_friends(self, user_id: str) -> list[User]:
         return await FriendshipRepository.get_user_friends(self.db, user_id)

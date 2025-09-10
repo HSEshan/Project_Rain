@@ -7,6 +7,7 @@ import type { AxiosResponse } from "axios";
 export default function LoginForm() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [loggingIn, setLoggingIn] = useState(false);
 
   const usernameRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -15,6 +16,7 @@ export default function LoginForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoggingIn(true);
     await postLogin(
       usernameRef.current?.value || "",
       passwordRef.current?.value || ""
@@ -27,6 +29,9 @@ export default function LoginForm() {
       })
       .catch((err: Error) => {
         setError(err.message);
+      })
+      .finally(() => {
+        setLoggingIn(false);
       });
   };
   return (
@@ -50,8 +55,15 @@ export default function LoginForm() {
       {searchParams.get("signup") && (
         <p className="text-green-400 text-sm text-center">Signup successful</p>
       )}
+      {loggingIn && (
+        // Spinner
+        <div className="flex justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      )}
       <button
         type="submit"
+        disabled={loggingIn}
         className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
       >
         Log in

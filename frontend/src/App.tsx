@@ -7,8 +7,7 @@ import {
 } from "react-router-dom";
 import { MessageLayout } from "./messages/MessageLayout";
 import { MessageView } from "./messages/MessageView";
-// import { GuildLayout } from "./guilds/GuildLayout";
-// import { GuildView } from "./guilds/GuildView";
+import { GuildLayout } from "./guild/GuildLayout";
 
 import AuthPage from "./auth/AuthPage";
 import RequireAuth from "./auth/RequireAuth";
@@ -45,13 +44,13 @@ export default function App() {
                 <Route index element={<MessageView />} />
               </Route>
             </Route>
-            {/* <Route path="/guild" element={<MainLayout />}>
-            <Route index element={<GuildLayout />} />
-            <Route path=":guildId" element={<GuildLayout />}>
-              <Route index element={<GuildView />} />
-              <Route path="channel/:channelId" element={<GuildView />} />
+            <Route path="/guild" element={<MainLayout />}>
+              <Route index element={<GuildLayout />} />
+              <Route path=":guildId" element={<GuildLayout />}>
+                {/* <Route index element={<GuildView />} />
+                <Route path="channel/:channelId" element={<GuildView />} /> */}
+              </Route>
             </Route>
-          </Route> */}
           </Route>
         </Routes>
       </BrowserRouter>

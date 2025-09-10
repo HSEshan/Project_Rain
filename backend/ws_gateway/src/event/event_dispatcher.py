@@ -6,6 +6,7 @@ import structlog
 from libs.event.schema import Event, EventType
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.config import AsyncSessionLocal
+from src.database.models import *
 
 # from src.services.friend_request_event_dispatcher import FriendRequestEventDispatcher
 from src.message.dispatcher import MessageEventDispatcher

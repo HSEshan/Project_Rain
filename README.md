@@ -1,5 +1,13 @@
 ## Project_ZeroTrace
 
+TODO: Fix channels and channel members response to return the db objects (must conve
+rt to Pydantic otherwise will fail)
+Use fetched channel members to populate user store
+Use fetched guild members to populate user store
+Integrate user store to display usernames in UI
+Might be useful to return user ids and object ids from db calls to populate stores
+Look into caching stores
+
 ### ⚙️ Backend Setup
 
 1. Navigate to the backend directory:

@@ -5,25 +5,28 @@ import { useParams } from "react-router-dom";
 import { useMessageStore } from "./messageStore";
 import { EventType } from "../utils/eventType";
 import { useAuth } from "../auth/AuthContext";
+import { useUserStore } from "../shared/userStore";
 
-// Custom Message component for better styling and text handling
 function MessageItem({ message }: { message: Message }) {
   const { getUser } = useAuth();
+  const { getUser: getUserFromStore } = useUserStore();
   const user = getUser();
   return (
     <div
-      className={`bg-white text-black p-3 rounded-lg shadow-sm border border-gray-200 mb-3 w-2/3 ${
+      className={`bg-gray-600 text-white p-3 rounded-lg shadow-sm border border-none mb-3 w-2/3 ${
         message.sender_id === user?.id ? "self-end" : "self-start"
       }`}
     >
       {" "}
       <div className="break-words whitespace-pre-wrap text-sm leading-relaxed">
-        {message.sender_id === user?.id ? "You" : message.sender_id}
+        {message.sender_id === user?.id
+          ? "You"
+          : getUserFromStore(message.sender_id)?.username}
       </div>
       <div className="break-words whitespace-pre-wrap text-sm leading-relaxed">
         {message.content}
       </div>
-      <div className="text-xs text-gray-500 mt-2 text-right">
+      <div className="text-xs text-gray-300 mt-2 text-right">
         {new Date(message.created_at).toLocaleTimeString()}
       </div>
     </div>
@@ -31,7 +34,7 @@ function MessageItem({ message }: { message: Message }) {
 }
 
 export function MessageView() {
-  const { getMessages, removeUnRead } = useMessageStore();
+  const { getMessages, removeUnRead, channels } = useMessageStore();
   const { dmId } = useParams<{ dmId: string }>();
   const messages = getMessages(dmId);
   const { getWs } = useWebSocket();
@@ -84,9 +87,12 @@ export function MessageView() {
   };
 
   return (
-    <div className="w-3/5 bg-gray-100 p-4 overflow-y-auto flex flex-col h-full">
-      <h1 className="text-lg text-black font-bold mb-4 flex-shrink-0">
-        Messages for {dmId}
+    <div className="w-3/5 bg-gray-800 p-4 overflow-y-auto flex flex-col h-full">
+      <h1 className="text-lg text-white font-bold mb-4 flex-shrink-0">
+        {channels
+          .find((channel) => channel.channel_id === dmId)
+          ?.participants.map((participant) => participant.username)
+          .join(", ")}
       </h1>
 
       {messages === undefined ? (
@@ -109,9 +115,9 @@ export function MessageView() {
             )}
           </div>
 
-          <div className="flex gap-2 relative bottom-0 left-0 right-0 p-4 bg-gray-100 border-t">
+          <div className="flex gap-2 relative bottom-0 left-0 right-0 p-4 bg-gray-800 border-t">
             <textarea
-              className="flex-1 p-3 rounded-lg shadow-sm border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+              className="flex-1 p-3 rounded-lg bg-gray-600 text-white shadow-sm border border-none focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
               ref={messageRef}
               rows={1}
               placeholder="Type your message here..."
