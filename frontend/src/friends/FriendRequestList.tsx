@@ -1,19 +1,17 @@
 import { useFriendRequestStore } from "./friendRequestStore";
 import { useUserStore } from "../shared/userStore";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { acceptFriendRequest, rejectFriendRequest } from "./apiClient";
 
 export default function FriendRequestList() {
   const { friendRequests, removeFriendRequest } = useFriendRequestStore();
-  const { users, addUsers } = useUserStore();
+  const { getUser: getUserFromStore } = useUserStore();
   const [response, setResponse] = useState<string>("");
-  useEffect(() => {
-    addUsers(friendRequests.map((friendRequest) => friendRequest.from_user_id));
-  }, [friendRequests]);
+
   const namedFriendRequests = friendRequests.map((friendRequest) => {
     return {
       id: friendRequest.id,
-      from_user_name: users.get(friendRequest.from_user_id)?.username,
+      from_user_name: getUserFromStore(friendRequest.from_user_id)?.username,
     };
   });
   const handleAccept = (id: string) => {

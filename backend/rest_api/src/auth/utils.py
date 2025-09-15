@@ -57,7 +57,7 @@ user_dependency = Annotated[CurrentUser, Depends(get_current_user)]
 
 
 def parse_login_method(login: str) -> str:
-    if re.search(r"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$", login):
+    if "@" in login and "." in login:
         return "email"
     else:
         return "username"

@@ -22,6 +22,7 @@ class SettingsFactory(BaseSettings):
     POSTGRES_PORT: str
     SECRET_KEY: str
     ALGORITHM: str
+    BCRYPT_ROUNDS: int
     SUPERUSER_EMAIL: str
     SUPERUSER_PASSWORD: str
     DOCS: bool

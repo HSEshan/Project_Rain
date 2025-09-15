@@ -1,12 +1,16 @@
 from passlib.context import CryptContext
+from src.core.config import settings
+from src.utils.aiowrapper import aio
 
 # All utilities for authentication
-bcrypt_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_bcrypt_context = CryptContext(
+    schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=settings.BCRYPT_ROUNDS
+)
 
 
-def get_password_hash(password: str) -> str:
-    return bcrypt_context.hash(password)
+async def get_password_hash(password: str) -> str:
+    return await aio(_bcrypt_context.hash)(password)
 
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt_context.verify(plain_password, hashed_password)
+async def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return await aio(_bcrypt_context.verify)(plain_password, hashed_password)

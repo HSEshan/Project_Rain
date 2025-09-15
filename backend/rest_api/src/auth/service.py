@@ -44,7 +44,7 @@ class AuthService(BaseService):
             user = User(
                 email=user.email,
                 username=user.username,
-                password_hash=get_password_hash(user.password),
+                password_hash=await get_password_hash(user.password),
             )
             self.db.add(user)
             await self.db.flush()
@@ -59,7 +59,7 @@ class AuthService(BaseService):
             user_to_login = await self.get_user_by_username(form_data.username)
         if not user_to_login:
             raise NotFoundException("User not found")
-        if not verify_password(
+        if not await verify_password(
             plain_password=form_data.password,
             hashed_password=user_to_login.password_hash,
         ):

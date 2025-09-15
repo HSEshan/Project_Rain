@@ -1,10 +1,5 @@
 import apiClient from "../utils/apiClientBase";
-import { type DMChannel, type Message } from "./types";
-
-export const getUserDMChannels = async (): Promise<DMChannel[]> => {
-  const response = await apiClient.get(`/channels/dms/me`);
-  return response.data;
-};
+import type { Message } from "./types";
 
 export const getChannelMessages = async (
   channelId: string

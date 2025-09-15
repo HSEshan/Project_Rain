@@ -7,7 +7,7 @@ export interface GuildStore {
   setGuilds: (guilds: Guild[]) => void;
   modalOpen: boolean;
   setModalOpen: (modalOpen: boolean) => void;
-  initialize: () => void;
+  fetchUserGuilds: () => Promise<void>;
 }
 
 export const useGuildStore = create<GuildStore>((set) => ({
@@ -15,8 +15,12 @@ export const useGuildStore = create<GuildStore>((set) => ({
   setGuilds: (guilds) => set({ guilds }),
   modalOpen: false,
   setModalOpen: (modalOpen) => set({ modalOpen }),
-  initialize: async () => {
-    const guilds = await getUserGuilds();
-    set({ guilds });
+  fetchUserGuilds: async () => {
+    try {
+      const guilds = await getUserGuilds();
+      set({ guilds });
+    } catch (error) {
+      console.error("Failed to fetch guilds:", error);
+    }
   },
 }));

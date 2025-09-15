@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 from dotenv import load_dotenv
 
@@ -23,6 +23,12 @@ class Config:
     grpc_max_concurrent_calls: int = int(os.getenv("GRPC_MAX_CONCURRENT_CALLS", "200"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     log_format: str = os.getenv("LOG_FORMAT", "json")
+
+    def __post_init__(self):
+        for f in fields(self):
+            value = getattr(self, f.name)
+            if value is None:
+                raise ValueError(f"Environment variable {f.name.upper()} is not set")
 
 
 config = Config()

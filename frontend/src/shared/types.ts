@@ -12,10 +12,11 @@ export enum ChannelType {
   GUILD_VOICE = "guild_voice",
 }
 
-export type DMChannel = {
-  channel_id: string;
-  participants: {
-    id: string;
-    username: string;
-  }[];
+export type Channel = {
+  id: string;
+  name?: string;
+  type: ChannelType;
+  guild_id?: string;
+  description?: string;
+  created_at: string;
 };

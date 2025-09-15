@@ -10,10 +10,14 @@ logger = structlog.get_logger(__name__)
 class UserRepository:
     @staticmethod
     async def get_user_by_username(db: AsyncSession, username: str) -> User:
+        print(f"Getting user by username: {username}")
         user = await db.execute(select(User).where(User.username == username))
         result = user.scalar_one_or_none()
+        print(f"User found: {result}")
         if not result:
+            print(f"User not found: {username}")
             raise NotFoundException("User not found")
+        print(f"Returning user: {result}")
         return result
 
     @staticmethod

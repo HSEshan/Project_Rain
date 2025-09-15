@@ -26,7 +26,7 @@ interface AuthContextType {
   login: (token: string) => void;
   logout: () => void;
   getToken: () => string | null;
-  getUser: () => User | null;
+  getCurrentUser: () => User | null;
   initialize: () => void;
 }
 
@@ -76,7 +76,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return token;
   };
 
-  const getUser = () => {
+  const getCurrentUser = () => {
     return user;
   };
 
@@ -106,7 +106,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     login,
     logout,
     getToken,
-    getUser,
+    getCurrentUser,
     initialize,
   };
 

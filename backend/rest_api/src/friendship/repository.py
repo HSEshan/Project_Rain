@@ -121,8 +121,6 @@ class FriendshipRepository:
             )
         )
         result = query.scalar_one_or_none()
-        if not result:
-            raise NotFoundException("Friendship not found")
         return result
 
     @staticmethod

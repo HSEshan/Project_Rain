@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { getUsers } from "./apiClient";
+import { getUsers } from "./userApiClient";
 
 export interface User {
   id: string;
@@ -7,54 +7,52 @@ export interface User {
 }
 
 export interface UserStore {
-  users: Map<string, User>;
-  setUsers: (users: User[]) => void;
-  addUsers: (ids: string[]) => Promise<void>;
+  users: Record<string, User>;
+  mergeUsers: (users: User[]) => void;
+  fetchUsers: (ids: string[]) => Promise<void>;
   getUser: (id: string) => User | undefined;
-  getUsers: (ids: string[]) => User[];
+  getMultipleUsers: (ids: string[]) => User[];
   isUserLoaded: (id: string) => boolean;
   getMissingUserIds: (ids: string[]) => string[];
+  clearUsers: () => void;
 }
 
 export const useUserStore = create<UserStore>((set, get) => ({
-  users: new Map(),
+  users: {},
 
-  setUsers: (newUsers) => {
-    const currentUsers = get().users;
-    newUsers.forEach((user) => {
-      currentUsers.set(user.id, user);
-    });
-    set({ users: currentUsers });
-  },
+  mergeUsers: (newUsers) =>
+    set((state) => {
+      const updated = { ...state.users };
+      newUsers.forEach((u) => {
+        updated[u.id] = u;
+      });
+      return { users: updated };
+    }),
 
-  getUser: (id) => get().users.get(id),
+  getUser: (id) => get().users[id],
 
-  getUsers: (ids) => {
-    const users = get().users;
-    return ids.map((id) => users.get(id)).filter(Boolean) as User[];
-  },
+  getMultipleUsers: (ids) =>
+    ids.map((id) => get().users[id]).filter(Boolean) as User[],
 
-  isUserLoaded: (id) => get().users.has(id),
+  isUserLoaded: (id) => !!get().users[id],
 
-  getMissingUserIds: (ids) => {
-    const users = get().users;
-    return ids.filter((id) => !users.has(id));
-  },
+  getMissingUserIds: (ids) => ids.filter((id) => !get().users[id]),
 
-  addUsers: async (ids) => {
-    const { getMissingUserIds, setUsers } = get();
-    const missingIds = getMissingUserIds(ids);
-
+  fetchUsers: async (ids) => {
+    const missingIds = get().getMissingUserIds(ids);
     if (missingIds.length === 0) {
-      console.log("All users already loaded");
-      return; // All users already loaded
+      console.log("All users are loaded", ids);
+      return;
     }
 
     try {
-      const response = await getUsers({ ids: missingIds });
-      setUsers(response.data.users);
+      const response = await getUsers(missingIds);
+      get().mergeUsers(response.data.users);
+      console.log("Users fetched and merged:", response.data.users);
     } catch (error) {
       console.error("Failed to fetch users:", error);
     }
   },
+
+  clearUsers: () => set({ users: {} }),
 }));

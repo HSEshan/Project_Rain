@@ -1,15 +1,13 @@
 from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
 from src.auth.utils import CurrentUser
-from src.channel.models import Channel, ChannelMember, ChannelType
+from src.channel.models import Channel, ChannelMember
 from src.channel.repository import ChannelRepository
-from src.channel.schemas import DMChannelCreate, DMChannelResponse, GuildChannelCreate
+from src.channel.schemas import DMChannelCreate, GuildChannelCreate
 from src.database.core import get_db
 from src.database.service import BaseService
 from src.guild.models import GuildMember, GuildMemberRole
-from src.user.models import User
 from src.utils.exceptions import NotFoundException
 
 
@@ -66,32 +64,15 @@ class ChannelService(BaseService):
             raise NotFoundException("Channel not found")
         return result
 
-    async def get_user_dm_channels(self, user: CurrentUser) -> list[dict]:
-        OtherUser = aliased(User)
+    async def get_user_channels(self, user: CurrentUser) -> list[Channel]:
+        return await ChannelRepository.get_user_channels(self.db, user.id)
 
-        stmt = (
-            select(Channel.id, OtherUser.id, OtherUser.username)
-            .join(ChannelMember, ChannelMember.channel_id == Channel.id)
-            .join(OtherUser, OtherUser.id == ChannelMember.user_id)
-            .where(
-                Channel.type == ChannelType.DM,
-                Channel.id.in_(
-                    select(ChannelMember.channel_id).where(
-                        ChannelMember.user_id == user.id
-                    )
-                ),
-                OtherUser.id != user.id,  # exclude self
-            )
+    async def get_channel_participants(
+        self, user: CurrentUser, channel_ids: list[str]
+    ) -> dict[str, list[str]]:
+        return await ChannelRepository.get_channel_participants(
+            self.db, user.id, channel_ids
         )
-
-        result = await self.db.execute(stmt)
-        rows = result.all()
-
-        response = DMChannelResponse()
-        for channel_id, other_id, other_username in rows:
-            response.push(channel_id, {"id": other_id, "username": other_username})
-
-        return response.to_list()
 
 
 def get_channel_service(db: AsyncSession = Depends(get_db)):

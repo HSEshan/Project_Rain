@@ -20,6 +20,7 @@ export const postLogin = async (
     );
     return res;
   } catch (err: unknown) {
+    console.error("Failed to login", err);
     if (err instanceof AxiosError) {
       if (err.response?.status === 404) {
         throw new Error("User not found");

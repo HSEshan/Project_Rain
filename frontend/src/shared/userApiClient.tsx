@@ -1,15 +1,9 @@
 import apiClient from "../utils/apiClientBase";
 import type { AxiosResponse } from "axios";
 
-export type BulkUserRequest = {
-  ids: string[];
-};
-
-export const getUsers = async (
-  request: BulkUserRequest
-): Promise<AxiosResponse> => {
+export const getUsers = async (ids: string[]): Promise<AxiosResponse> => {
   try {
-    const response = await apiClient.post("/users/bulk", request);
+    const response = await apiClient.post("/users/bulk", { ids });
     return response;
   } catch (error) {
     console.error(error);

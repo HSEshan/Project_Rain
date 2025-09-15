@@ -1,35 +1,45 @@
 import { useParams } from "react-router-dom";
-import { useMessageStore } from "./messageStore";
-import { useEffect } from "react";
+import { useChannelStore } from "../shared/channelStore";
+import { useUserStore } from "../shared/userStore";
 import LinkButton from "../shared/LinkButton";
 import AddFriendModal from "../friends/AddFriendModal";
 import { useFriendRequestStore } from "../friends/friendRequestStore";
+import { useEffect } from "react";
+import { useMessageStore } from "../shared/messageStore";
 
 export function MessageSidebar() {
-  const { channels, unReads, removeUnRead } = useMessageStore();
+  const { getAllChannels, getParticipants } = useChannelStore();
+  const { fetchChannelMessages } = useMessageStore();
   const { setIsModalOpen } = useFriendRequestStore();
+  const { getUser: getUserFromStore } = useUserStore();
   const { dmId } = useParams<{ dmId: string }>();
+  const channels = getAllChannels();
 
   useEffect(() => {
-    removeUnRead(dmId ?? "");
-  }, [channels]);
+    if (dmId) {
+      fetchChannelMessages(dmId);
+    }
+  }, [dmId, fetchChannelMessages]);
 
   return (
     <div className="w-1/6 bg-gray-900 text-white flex flex-col items-center px-2 py-4 gap-4">
       <button onClick={() => setIsModalOpen(true)}>Add Friend</button>
       <AddFriendModal />
-      {channels.map((channel) => (
-        <LinkButton
-          to={`/dm/${channel.channel_id}`}
-          key={channel.channel_id}
-          active={dmId === channel.channel_id}
-          unread={unReads.includes(channel.channel_id)}
-        >
-          {channel.participants
-            .map((participant) => participant.username)
-            .join(", ")}
-        </LinkButton>
-      ))}
+      {channels ? (
+        channels.map((channel) => (
+          <LinkButton
+            to={`/dm/${channel.id}`}
+            key={channel.id}
+            active={dmId === channel.id}
+          >
+            {getParticipants(channel.id)
+              .map((participant) => getUserFromStore(participant)?.username)
+              .join(", ")}
+          </LinkButton>
+        ))
+      ) : (
+        <p>No channels</p>
+      )}
     </div>
   );
 }

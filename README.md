@@ -7,6 +7,7 @@ Use fetched guild members to populate user store
 Integrate user store to display usernames in UI
 Might be useful to return user ids and object ids from db calls to populate stores
 Look into caching stores
+Look into db transaction for auth and bcrypt, and re: for password matching
 
 ### ⚙️ Backend Setup
 

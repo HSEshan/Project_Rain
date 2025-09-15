@@ -3,20 +3,20 @@ import Modal from "../shared/Modal";
 import { useFriendRequestStore } from "./friendRequestStore";
 import FriendRequestList from "./FriendRequestList";
 import { createFriendRequest } from "./apiClient";
-import type { AxiosResponse } from "axios";
 
 export default function AddFriendModal() {
   const usernameRef = useRef<HTMLInputElement>(null);
-  const { addFriendRequests, isModalOpen, setIsModalOpen } =
-    useFriendRequestStore();
+  const { isModalOpen, setIsModalOpen } = useFriendRequestStore();
   const [response, setResponse] = useState<string>("");
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!usernameRef.current?.value) return;
+    if (!usernameRef.current?.value) {
+      setResponse("Please enter a username");
+      return;
+    }
     await createFriendRequest(usernameRef.current?.value)
-      .then((res: AxiosResponse) => {
-        addFriendRequests([res.data]);
-        setResponse("Friend request sent");
+      .then(() => {
+        setResponse(`Friend request sent to ${usernameRef.current?.value}`);
       })
       .catch((err: Error) => {
         setResponse(err.message);
@@ -43,10 +43,10 @@ export default function AddFriendModal() {
             type="text"
             placeholder="Enter username"
             className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            required
           />
         </div>
         <div className="flex flex-col gap-2">
+          <h4 className="text-sm font-medium text-gray-300">Friend Requests</h4>
           <FriendRequestList />
         </div>
 

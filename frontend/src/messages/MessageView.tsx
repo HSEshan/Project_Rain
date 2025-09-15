@@ -1,16 +1,24 @@
-import { type Message } from "./types";
+import { type Message } from "../shared/types";
 import { useWebSocket } from "../utils/WebsocketProvider";
 import { useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
-import { useMessageStore } from "./messageStore";
+import { useMessageStore } from "../shared/messageStore";
 import { EventType } from "../utils/eventType";
 import { useAuth } from "../auth/AuthContext";
 import { useUserStore } from "../shared/userStore";
+import { useChannelStore } from "../shared/channelStore";
 
 function MessageItem({ message }: { message: Message }) {
-  const { getUser } = useAuth();
+  const { getCurrentUser } = useAuth();
   const { getUser: getUserFromStore } = useUserStore();
-  const user = getUser();
+  const user = getCurrentUser();
+
+  const getSenderName = () => {
+    if (message.sender_id === user?.id) return "You";
+    const sender = getUserFromStore(message.sender_id);
+    return sender?.username || "Loading...";
+  };
+
   return (
     <div
       className={`bg-gray-600 text-white p-3 rounded-lg shadow-sm border border-none mb-3 w-2/3 ${
@@ -19,32 +27,28 @@ function MessageItem({ message }: { message: Message }) {
     >
       {" "}
       <div className="break-words whitespace-pre-wrap text-sm leading-relaxed">
-        {message.sender_id === user?.id
-          ? "You"
-          : getUserFromStore(message.sender_id)?.username}
+        {getSenderName()}
       </div>
       <div className="break-words whitespace-pre-wrap text-sm leading-relaxed">
         {message.content}
       </div>
       <div className="text-xs text-gray-300 mt-2 text-right">
-        {new Date(message.created_at).toLocaleTimeString()}
+        {new Date(message.created_at).toLocaleString()}
       </div>
     </div>
   );
 }
 
 export function MessageView() {
-  const { getMessages, removeUnRead, channels } = useMessageStore();
+  const { getChannelMessages } = useMessageStore();
+  const { getParticipants } = useChannelStore();
+  const { getUser: getUserFromStore } = useUserStore();
   const { dmId } = useParams<{ dmId: string }>();
-  const messages = getMessages(dmId);
+  const messages = getChannelMessages(dmId ?? "");
   const { getWs } = useWebSocket();
   const ws = getWs();
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    removeUnRead(dmId ?? "");
-  }, [dmId]);
 
   useEffect(() => {
     if (messagesContainerRef.current) {
@@ -86,13 +90,24 @@ export function MessageView() {
     }
   };
 
+  const getParticipantNames = () => {
+    if (!dmId) return "Loading...";
+
+    const participantIds = getParticipants(dmId);
+    const names = participantIds
+      .map((participantId) => {
+        const user = getUserFromStore(participantId);
+        return user?.username || "Loading...";
+      })
+      .join(", ");
+
+    return names || "Loading...";
+  };
+
   return (
     <div className="w-3/5 bg-gray-800 p-4 overflow-y-auto flex flex-col h-full">
       <h1 className="text-lg text-white font-bold mb-4 flex-shrink-0">
-        {channels
-          .find((channel) => channel.channel_id === dmId)
-          ?.participants.map((participant) => participant.username)
-          .join(", ")}
+        {getParticipantNames()}
       </h1>
 
       {messages === undefined ? (

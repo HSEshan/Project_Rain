@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.channel.models import Channel, ChannelMember, ChannelType
@@ -46,3 +48,28 @@ class ChannelRepository:
         if not result:
             raise NotFoundException("You are not a member of this channel")
         return result
+
+    @staticmethod
+    async def get_user_channels(db: AsyncSession, user_id: str) -> list[Channel]:
+        channel_members = await db.execute(
+            select(ChannelMember.channel_id).where(ChannelMember.user_id == user_id)
+        )
+        channel_ids = channel_members.scalars().all()
+        channels = await db.execute(select(Channel).where(Channel.id.in_(channel_ids)))
+        return channels.scalars().all()
+
+    @staticmethod
+    async def get_channel_participants(
+        db: AsyncSession, current_user_id: str, channel_ids: list[str]
+    ) -> dict[str, list[str]]:
+        channel_members = await db.execute(
+            select(ChannelMember).where(
+                ChannelMember.channel_id.in_(channel_ids),
+                ChannelMember.user_id != current_user_id,
+            )
+        )
+        channel_members = channel_members.scalars().all()
+        participants = defaultdict(list)
+        for channel_member in channel_members:
+            participants[channel_member.channel_id].append(channel_member.user_id)
+        return participants
