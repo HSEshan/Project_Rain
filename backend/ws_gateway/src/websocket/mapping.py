@@ -1,5 +1,9 @@
 from collections import defaultdict
 
+import structlog
+
+logger = structlog.get_logger()
+
 
 class UserMapping:
     """
@@ -29,12 +33,23 @@ class UserMapping:
         """
         return self.channel_id_to_user_ids.get(channel_id, [])
 
-    def remove_user_from_channels(self, user_id: str):
+    def get_all_channel_ids(self) -> list[str]:
+        """
+        Get all channel IDs.
+        """
+        return list(self.channel_id_to_user_ids.keys())
+
+    def remove_user_from_channels(self, user_id: str) -> list[str]:
         """
         Remove a user from all channels. If a channel is empty, remove it.
         """
         channel_ids = self.user_id_to_channel_ids.pop(user_id, [])
+        empty_channel_ids = []
         for channel_id in channel_ids:
             self.channel_id_to_user_ids[channel_id].remove(user_id)
             if not self.channel_id_to_user_ids[channel_id]:
-                self.channel_id_to_user_ids.pop(channel_id)
+                empty_channel_ids.append(channel_id)
+        for channel_id in empty_channel_ids:
+            self.channel_id_to_user_ids.pop(channel_id)
+        logger.info(f"Empty channel IDs: {empty_channel_ids}")
+        return empty_channel_ids

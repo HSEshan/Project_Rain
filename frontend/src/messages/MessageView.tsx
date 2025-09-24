@@ -25,7 +25,6 @@ function MessageItem({ message }: { message: Message }) {
         message.sender_id === user?.id ? "self-end" : "self-start"
       }`}
     >
-      {" "}
       <div className="break-words whitespace-pre-wrap text-sm leading-relaxed">
         {getSenderName()}
       </div>
@@ -44,8 +43,9 @@ export function MessageView() {
   const { getParticipants } = useChannelStore();
   const { getUser: getUserFromStore } = useUserStore();
   const { dmId } = useParams<{ dmId: string }>();
-  const messages = getChannelMessages(dmId ?? "");
   const { getWs } = useWebSocket();
+
+  const messages = getChannelMessages(dmId ?? "");
   const ws = getWs();
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);

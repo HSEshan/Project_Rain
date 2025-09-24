@@ -1,23 +1,16 @@
-import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.user.models import User
 from src.utils.exceptions import NotFoundException
 
-logger = structlog.get_logger(__name__)
-
 
 class UserRepository:
     @staticmethod
     async def get_user_by_username(db: AsyncSession, username: str) -> User:
-        print(f"Getting user by username: {username}")
         user = await db.execute(select(User).where(User.username == username))
         result = user.scalar_one_or_none()
-        print(f"User found: {result}")
         if not result:
-            print(f"User not found: {username}")
             raise NotFoundException("User not found")
-        print(f"Returning user: {result}")
         return result
 
     @staticmethod
@@ -33,6 +26,5 @@ class UserRepository:
         users = await db.execute(select(User).where(User.id.in_(user_ids)))
         result = users.scalars().all()
         if not result:
-            logger.error(f"Users not found: {user_ids}")
             raise NotFoundException(f"Users not found")
         return result

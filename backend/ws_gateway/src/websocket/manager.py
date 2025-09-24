@@ -58,7 +58,11 @@ class WebsocketManager:
         Remove a client from the service.
         """
         del self.clients[client_id]
-        self.user_mapping.remove_user_from_channels(client_id)
+        empty_channel_ids = self.user_mapping.remove_user_from_channels(client_id)
+        for channel_id in empty_channel_ids:
+            await self.redis_manager.remove_grpc_endpoint_from_channel(
+                channel_id, self.grpc_endpoint
+            )
         await self.redis_manager.delete_user_grpc_endpoint(client_id)
         logger.info(f"Client {client_id} disconnected")
 

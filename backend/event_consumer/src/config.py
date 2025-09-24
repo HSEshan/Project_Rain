@@ -1,13 +1,6 @@
 import os
 from dataclasses import dataclass, fields
 
-from dotenv import load_dotenv
-
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-
-if ENVIRONMENT == "production":
-    load_dotenv("production.env")
-
 
 @dataclass
 class Config:
@@ -19,16 +12,18 @@ class Config:
     consumer_group: str = os.getenv("CONSUMER_GROUP", "grpc_group")
     heartbeat_ttl: int = int(os.getenv("HEARTBEAT_TTL", "15"))
     grpc_timeout: int = int(os.getenv("GRPC_TIMEOUT", "5"))
-    max_grpc_connections: int = int(os.getenv("MAX_GRPC_CONNECTIONS", "1000"))
-    grpc_max_concurrent_calls: int = int(os.getenv("GRPC_MAX_CONCURRENT_CALLS", "200"))
+    max_grpc_connections: int = int(os.getenv("MAX_GRPC_CONNECTIONS", "100"))
     log_level: str = os.getenv("LOG_LEVEL", "INFO")
     log_format: str = os.getenv("LOG_FORMAT", "json")
 
     def __post_init__(self):
+        missing_vars = []
         for f in fields(self):
             value = getattr(self, f.name)
             if value is None:
-                raise ValueError(f"Environment variable {f.name.upper()} is not set")
+                missing_vars.append(f.name.upper())
+        if missing_vars:
+            raise ValueError(f"Environment variables {missing_vars} are not set")
 
 
 config = Config()

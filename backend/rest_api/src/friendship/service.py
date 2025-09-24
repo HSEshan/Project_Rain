@@ -18,7 +18,6 @@ class FriendshipService(BaseService):
             friend_request = await FriendshipRepository.create_friend_request(
                 self.db, friend_request
             )
-            print(f"Friend request created: {friend_request}")
         return friend_request
 
     async def get_friend_request_by_id(self, friend_request_id: str) -> FriendRequest:

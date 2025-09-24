@@ -1,4 +1,4 @@
-// chat.proto
+// event.proto
 
 syntax = "proto3";
 
@@ -14,6 +14,10 @@ message Event {
   string timestamp = 7;
 }
 
+message EventBatch {
+  repeated Event events = 1;
+}
+
 message Ack {
   bool success = 1;
   string message = 2;
@@ -21,4 +25,5 @@ message Ack {
 
 service EventService {
   rpc SendEvent(Event) returns (Ack);
+  rpc SendEvents(EventBatch) returns (Ack);
 }

@@ -3,7 +3,7 @@ import structlog
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from libs.event.schema import Event
 from src.auth.service import get_current_user_ws
-from src.event.event_processor import event_processor
+from src.event.event_queue import event_queue
 from src.websocket.manager import websocket_manager
 
 logger = structlog.get_logger()
@@ -22,7 +22,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
             try:
                 event = Event(**orjson.loads(data), sender_id=current_user.id)
                 logger.debug(f"Received event: {event}")
-                await event_processor.enqueue_event(event)
+                await event_queue.enqueue_event(event)
             except Exception as e:
                 logger.error(f"Error processing event: {e}")
 

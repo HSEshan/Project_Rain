@@ -15,7 +15,7 @@ class LogFormat(enum.Enum):
 def setup_logging(
     service_name: str,
     log_format: str = LogFormat.JSON.value,
-    level: str = logging.INFO,
+    level: int = logging.INFO,
 ):
     logging.basicConfig(
         format="%(message)s",
@@ -25,7 +25,7 @@ def setup_logging(
 
     shared_processors = [
         structlog.contextvars.merge_contextvars,
-        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.TimeStamper(fmt="iso", utc=True),
         structlog.processors.CallsiteParameterAdder(
             [
                 structlog.processors.CallsiteParameter.FILENAME,
@@ -52,7 +52,8 @@ def setup_logging(
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
     )
-    structlog.get_logger().bind(service=service_name)
+
+    structlog.contextvars.bind_contextvars(service=service_name)
 
 
 def bind_event_context(

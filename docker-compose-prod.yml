@@ -27,7 +27,7 @@ services:
       retries: 5
 
   rest_api:
-    image: ghcr.io/hseshan/project_rain/rest_api:prod
+    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/rest_api:prod
     env_file:
       - ./rest_api.env
     environment:
@@ -45,7 +45,7 @@ services:
       retries: 5
 
   ws_gateway:
-    image: ghcr.io/hseshan/project_rain/ws_gateway:prod
+    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/ws_gateway:prod
     env_file:
       - ./ws_gateway.env
     environment:
@@ -63,7 +63,7 @@ services:
       retries: 5
 
   event_consumer:
-    image: ghcr.io/hseshan/project_rain/event_consumer:prod
+    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/event_consumer:prod
     env_file:
       - ./event_consumer.env
     environment:
@@ -76,7 +76,7 @@ services:
       - postgres
 
   lease_manager:
-    image: ghcr.io/hseshan/project_rain/lease_manager:prod
+    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/lease_manager:prod
     environment:
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
@@ -87,7 +87,7 @@ services:
       - postgres
 
   frontend:
-    image: ghcr.io/hseshan/project_rain/frontend:prod
+    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/frontend:prod
     restart: unless-stopped
 
   # edge caddy: PUBLIC ENTRYPOINT (TLS + reverse proxy)

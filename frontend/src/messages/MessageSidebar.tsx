@@ -6,6 +6,7 @@ import AddFriendModal from "../friends/AddFriendModal";
 import { useFriendRequestStore } from "../friends/friendRequestStore";
 import { useEffect } from "react";
 import { useMessageStore } from "../shared/messageStore";
+import { PiUserCircle } from "react-icons/pi";
 
 export function MessageSidebar() {
   const { getAllChannels, getParticipants } = useChannelStore();
@@ -32,9 +33,12 @@ export function MessageSidebar() {
             key={channel.id}
             active={dmId === channel.id}
           >
-            {getParticipants(channel.id)
-              .map((participant) => getUserFromStore(participant)?.username)
-              .join(", ")}
+            <div className="flex items-center gap-2 w-full px-2">
+              <PiUserCircle size={30} className="relative mr-2" />
+              {getParticipants(channel.id)
+                .map((participant) => getUserFromStore(participant)?.username)
+                .join(", ")}
+            </div>
           </LinkButton>
         ))
       ) : (

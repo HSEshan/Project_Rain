@@ -3,7 +3,7 @@ from grpc import aio
 from libs.event import event_pb2, event_pb2_grpc
 from libs.event.codec import EventCodec
 from libs.logging import bind_event_context
-from src.event.event_processor import event_processor
+from src.event.event_dispatcher import event_dispatcher
 
 logger = structlog.get_logger()
 
@@ -11,10 +11,16 @@ logger = structlog.get_logger()
 @bind_event_context(event_arg_name="request")
 class EventService(event_pb2_grpc.EventServiceServicer):
     async def SendEvent(self, request, context):
-        event = EventCodec.to_pydantic(request)
+        event = request.event
         logger.debug(f"Received event: {event}")
+        await event_dispatcher.send_events_to_clients([EventCodec.to_pydantic(event)])
+        return event_pb2.Ack(success=True, message="Delivered")
 
-        await event_processor.send_event_to_clients(event)
+    async def SendEvents(self, request, context):
+        events = request.events
+        logger.debug(f"Received events: {events}")
+        events = [EventCodec.to_pydantic(event) for event in events]
+        await event_dispatcher.send_events_to_clients(events)
         return event_pb2.Ack(success=True, message="Delivered")
 
 

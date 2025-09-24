@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 from typing import List, Optional
 
 import structlog
@@ -57,11 +58,9 @@ class RedisManager:
         self,
         channel_id: str,
         grpc_endpoint: str,
-        ttl: int = settings.DEFAULT_TTL_SECONDS,
     ):
         key = RediKeys.channel_grpc_endpoints(channel_id)
         await self.redis.sadd(key, grpc_endpoint)
-        await self.redis.expire(key, ttl)
 
     async def remove_grpc_endpoint_from_channel(
         self, channel_id: str, grpc_endpoint: str
@@ -71,12 +70,9 @@ class RedisManager:
         if await self.redis.scard(key) == 0:
             await self.redis.delete(key)
 
-    async def add_channel_to_user(
-        self, user_id: str, channel_id: str, ttl: int = settings.DEFAULT_TTL_SECONDS
-    ):
+    async def add_channel_to_user(self, user_id: str, channel_id: str):
         key = RediKeys.user_channels(user_id)
         await self.redis.sadd(key, str(channel_id))
-        await self.redis.expire(key, ttl)
 
     async def remove_channel_from_user(self, user_id: str, channel_id: str):
         key = RediKeys.user_channels(user_id)
@@ -118,15 +114,21 @@ class RedisManager:
         data = EventCodec.to_redis(event)
         await self.redis.xadd(key, data)
 
-    async def batch_push_events_to_streams(self, batch: dict[str, list[Event]]):
+    async def batch_push_events_to_streams(self, batch: List[Event]):
         pipe = self.redis.pipeline()
-        for shard_id, events in batch.items():
+        for event in batch:
+            shard_id = self._compute_shard_id(event.receiver_id)
             key = RediKeys.stream_shard(shard_id)
-            event_data = [EventCodec.to_redis(event) for event in events]
-            for data in event_data:
-                pipe.xadd(key, data)
+            event_data = EventCodec.to_redis(event)
+            pipe.xadd(key, event_data)
 
         await pipe.execute()
+
+    def _compute_shard_id(
+        self, receiver_id: str, num_shards: int = settings.NUM_SHARDS
+    ) -> str:
+        hash_val = int(hashlib.sha256(str(receiver_id).encode()).hexdigest(), 16)
+        return str(hash_val % num_shards)
 
     async def query_user_channels_from_db(self, user_id: str) -> List[str]:
         async with AsyncSessionLocal() as session:

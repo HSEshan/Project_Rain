@@ -2,6 +2,9 @@ import { useAuth } from "../auth/AuthContext";
 import { useWebSocket } from "../utils/WebsocketProvider";
 import SideBarButton from "./SideBarButton";
 import logoutIcon from "../assets/logout_icon.svg";
+import { PiUserCircle } from "react-icons/pi";
+import { PiShield } from "react-icons/pi";
+import { RiHome2Line } from "react-icons/ri";
 
 export function Sidebar() {
   const { isConnected } = useWebSocket();
@@ -14,9 +17,16 @@ export function Sidebar() {
       ) : (
         <div className="w-3 h-3 bg-red-500 rounded-full" />
       )}
-      <SideBarButton to="/dm">DM</SideBarButton>
-      <SideBarButton to="/guild">Guild</SideBarButton>
-      <SideBarButton onClick={logout}>
+      <SideBarButton to="/home" toolTipText="Home">
+        <RiHome2Line size={30} />
+      </SideBarButton>
+      <SideBarButton to="/dm" toolTipText="Messages">
+        <PiUserCircle size={30} />
+      </SideBarButton>
+      <SideBarButton to="/guild" toolTipText="Guilds">
+        <PiShield size={30} />
+      </SideBarButton>
+      <SideBarButton onClick={logout} toolTipText="Logout">
         {<img src={logoutIcon} alt="Logout" />}
       </SideBarButton>
     </div>

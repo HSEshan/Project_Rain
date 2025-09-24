@@ -27,7 +27,7 @@ class LeaseManager:
                 logger.info("Connected to Redis")
                 break
             except Exception as e:
-                logger.error(f"Error connecting to Redis on attempt {i}: {e}")
+                logger.error("Error connecting to Redis on attempt", attempt=i, error=e)
                 await asyncio.sleep(2)
         if not self.redis:
             raise Exception("Failed to connect to Redis")
@@ -48,7 +48,9 @@ class LeaseManager:
                     id="0",
                     mkstream=True,
                 )
-                logger.info(f"Created consumer group for {stream_name}")
+                logger.info(
+                    "Created consumer group for stream", stream_name=stream_name
+                )
             except ResponseError as e:
                 if "BUSYGROUP" not in str(e):
                     raise
@@ -59,20 +61,26 @@ class LeaseManager:
         for cid in [cid.decode("utf-8") for cid in consumers]:
             ttl = await self.redis.ttl(RediKeys.heartbeat(cid))
             if ttl > 0:
-                logger.debug(f"{cid} heartbeat TTL: {ttl}")
+                logger.debug("Consumer heartbeat TTL", consumer_id=cid, ttl=ttl)
                 active.append(cid)
                 self.suspect_consumers.pop(cid, None)
             elif cid not in self.suspect_consumers:
-                logger.warning(f"{cid} heartbeat expired, adding to suspect list")
+                logger.warning(
+                    "Consumer heartbeat expired, adding to suspect list",
+                    consumer_id=cid,
+                )
                 self.suspect_consumers[cid] = time.monotonic()
 
         for cid, timestamp in list(self.suspect_consumers.items()):
             if time.monotonic() - timestamp > 15:
-                logger.warning(f"{cid} grace period expired, removing from redis")
+                logger.warning(
+                    "Consumer grace period expired, removing from redis",
+                    consumer_id=cid,
+                )
                 await self.redis.srem(RediKeys.event_consumers(), cid)
                 self.suspect_consumers.pop(cid, None)
 
-        logger.info(f"Active consumers: {active}")
+        logger.info("Active consumers", active_consumers=active)
         return active
 
     async def assign_leases(self):
@@ -98,7 +106,7 @@ class LeaseManager:
                 stream_id += 1
 
         await self.redis.hset(RediKeys.leases(), mapping=assignments)
-        logger.info(f"Assigned leases to {len(consumers)} consumers")
+        logger.info("Assigned leases to consumers", num_consumers=len(consumers))
 
     async def run(self):
         logger.info("Running...")
@@ -112,5 +120,5 @@ class LeaseManager:
                 sleep_duration = max(0, next_lease - time.monotonic())
                 await asyncio.sleep(sleep_duration)
             except Exception as e:
-                logger.error(f"Error: {e}")
+                logger.error("Error", error=e)
                 await asyncio.sleep(5)

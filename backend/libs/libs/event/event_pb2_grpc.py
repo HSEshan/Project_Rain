@@ -4,7 +4,7 @@ import warnings
 
 import grpc
 
-from . import event_pb2 as event_dot_event__pb2
+from . import event_pb2 as event__pb2
 
 GRPC_GENERATED_VERSION = "1.74.0"
 GRPC_VERSION = grpc.__version__
@@ -22,7 +22,7 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f"The grpc package installed is at version {GRPC_VERSION},"
-        + f" but the generated code in event/event_pb2_grpc.py depends on"
+        + f" but the generated code in event_pb2_grpc.py depends on"
         + f" grpcio>={GRPC_GENERATED_VERSION}."
         + f" Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}"
         + f" or downgrade your generated code using grpcio-tools<={GRPC_VERSION}."
@@ -40,8 +40,14 @@ class EventServiceStub(object):
         """
         self.SendEvent = channel.unary_unary(
             "/event.EventService/SendEvent",
-            request_serializer=event_dot_event__pb2.Event.SerializeToString,
-            response_deserializer=event_dot_event__pb2.Ack.FromString,
+            request_serializer=event__pb2.Event.SerializeToString,
+            response_deserializer=event__pb2.Ack.FromString,
+            _registered_method=True,
+        )
+        self.SendEvents = channel.unary_unary(
+            "/event.EventService/SendEvents",
+            request_serializer=event__pb2.EventBatch.SerializeToString,
+            response_deserializer=event__pb2.Ack.FromString,
             _registered_method=True,
         )
 
@@ -55,13 +61,24 @@ class EventServiceServicer(object):
         context.set_details("Method not implemented!")
         raise NotImplementedError("Method not implemented!")
 
+    def SendEvents(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details("Method not implemented!")
+        raise NotImplementedError("Method not implemented!")
+
 
 def add_EventServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
         "SendEvent": grpc.unary_unary_rpc_method_handler(
             servicer.SendEvent,
-            request_deserializer=event_dot_event__pb2.Event.FromString,
-            response_serializer=event_dot_event__pb2.Ack.SerializeToString,
+            request_deserializer=event__pb2.Event.FromString,
+            response_serializer=event__pb2.Ack.SerializeToString,
+        ),
+        "SendEvents": grpc.unary_unary_rpc_method_handler(
+            servicer.SendEvents,
+            request_deserializer=event__pb2.EventBatch.FromString,
+            response_serializer=event__pb2.Ack.SerializeToString,
         ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -92,8 +109,38 @@ class EventService(object):
             request,
             target,
             "/event.EventService/SendEvent",
-            event_dot_event__pb2.Event.SerializeToString,
-            event_dot_event__pb2.Ack.FromString,
+            event__pb2.Event.SerializeToString,
+            event__pb2.Ack.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True,
+        )
+
+    @staticmethod
+    def SendEvents(
+        request,
+        target,
+        options=(),
+        channel_credentials=None,
+        call_credentials=None,
+        insecure=False,
+        compression=None,
+        wait_for_ready=None,
+        timeout=None,
+        metadata=None,
+    ):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            "/event.EventService/SendEvents",
+            event__pb2.EventBatch.SerializeToString,
+            event__pb2.Ack.FromString,
             options,
             channel_credentials,
             insecure,

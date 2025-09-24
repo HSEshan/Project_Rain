@@ -20,20 +20,28 @@ class ChannelRepository:
         await db.flush()
         await db.refresh(new_channel)
 
-        channel_member_1 = ChannelMember(
-            channel_id=new_channel.id,
-            user_id=channel_create.user_id,
+        await ChannelRepository.add_user_to_channel(
+            db, new_channel.id, channel_create.user_id
         )
-        db.add(channel_member_1)
-        await db.flush()
 
-        channel_member_2 = ChannelMember(
-            channel_id=new_channel.id,
-            user_id=channel_create.user_id2,
+        await ChannelRepository.add_user_to_channel(
+            db, new_channel.id, channel_create.user_id2
         )
-        db.add(channel_member_2)
-        await db.flush()
+
         return new_channel
+
+    @staticmethod
+    async def add_user_to_channel(
+        db: AsyncSession, channel_id: str, user_id: str
+    ) -> ChannelMember:
+        channel_member = ChannelMember(
+            channel_id=channel_id,
+            user_id=user_id,
+        )
+        db.add(channel_member)
+        await db.flush()
+        await db.refresh(channel_member)
+        return channel_member
 
     @staticmethod
     async def check_channel_member(
@@ -47,6 +55,18 @@ class ChannelRepository:
         result = channel_member.scalar_one_or_none()
         if not result:
             raise NotFoundException("You are not a member of this channel")
+        return result
+
+    @staticmethod
+    async def get_channels_by_guild_ids(
+        db: AsyncSession, guild_ids: list[str]
+    ) -> list[Channel]:
+        channel = await db.execute(
+            select(Channel).where(Channel.guild_id.in_(guild_ids))
+        )
+        result = channel.scalars().all()
+        if not result:
+            raise NotFoundException("No channels found for these guilds")
         return result
 
     @staticmethod

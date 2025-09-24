@@ -1,14 +1,5 @@
 ## Project_ZeroTrace
 
-TODO: Fix channels and channel members response to return the db objects (must conve
-rt to Pydantic otherwise will fail)
-Use fetched channel members to populate user store
-Use fetched guild members to populate user store
-Integrate user store to display usernames in UI
-Might be useful to return user ids and object ids from db calls to populate stores
-Look into caching stores
-Look into db transaction for auth and bcrypt, and re: for password matching
-
 ### ⚙️ Backend Setup
 
 1. Navigate to the backend directory:
@@ -70,7 +61,13 @@ Look into db transaction for auth and bcrypt, and re: for password matching
    The frontend will be available at `http://localhost:3000`.
 
 TODO
-Fix OAuth2 in login router
-Create and update models
-UUIDs for IDs
-Timestamp convertion to datetime for DB
+Fetch user friends
+Friendship delete
+Friend request sender handle on frontend
+Friend request check if already exist
+Friend request event
+DM channel creation on friend request accept
+Guild update delete
+Home dashboard with new icon
+Guild channels
+Guild default channels
