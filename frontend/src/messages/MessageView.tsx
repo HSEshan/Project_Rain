@@ -1,6 +1,6 @@
 import { type Message } from "../shared/types";
 import { useWebSocket } from "../utils/WebsocketProvider";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useMessageStore } from "../shared/messageStore";
 import { EventType } from "../utils/eventType";
@@ -11,10 +11,10 @@ import { useChannelStore } from "../shared/channelStore";
 function MessageItem({ message }: { message: Message }) {
   const { getCurrentUser } = useAuth();
   const { getUser: getUserFromStore } = useUserStore();
-  const user = getCurrentUser();
+  const currentUser = getCurrentUser();
 
   const getSenderName = () => {
-    if (message.sender_id === user?.id) return "You";
+    if (message.sender_id === currentUser?.id) return "You";
     const sender = getUserFromStore(message.sender_id);
     return sender?.username || "Loading...";
   };
@@ -22,7 +22,7 @@ function MessageItem({ message }: { message: Message }) {
   return (
     <div
       className={`bg-gray-600 text-white p-3 rounded-lg shadow-sm border border-none mb-3 w-2/3 ${
-        message.sender_id === user?.id ? "self-end" : "self-start"
+        message.sender_id === currentUser?.id ? "self-end" : "self-start"
       }`}
     >
       <div className="break-words whitespace-pre-wrap text-sm leading-relaxed">
@@ -49,14 +49,31 @@ export function MessageView() {
   const ws = getWs();
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
-  useEffect(() => {
+  const scrollToBottom = (smooth: boolean = false) => {
     if (messagesContainerRef.current) {
       messagesContainerRef.current.scrollTo({
         top: messagesContainerRef.current.scrollHeight,
-        behavior: "smooth",
+        behavior: smooth ? "smooth" : undefined,
       });
     }
+  };
+  useEffect(() => {
+    if (dmId) {
+      setIsInitialLoad(true);
+    }
+  }, [dmId]);
+
+  useEffect(() => {
+    if (!messages || messages.length === 0) return;
+    if (isInitialLoad) {
+      setIsInitialLoad(false);
+      scrollToBottom(false);
+    } else {
+      scrollToBottom(true);
+    }
+    console.log(messages);
   }, [messages]);
 
   const sendMessage = () => {
@@ -105,7 +122,7 @@ export function MessageView() {
   };
 
   return (
-    <div className="w-3/5 bg-gray-800 p-4 overflow-y-auto flex flex-col h-full">
+    <div className="w-3/5 bg-gray-800 p-4 flex flex-col h-full">
       <h1 className="text-lg text-white font-bold mb-4 flex-shrink-0">
         {getParticipantNames()}
       </h1>
@@ -114,9 +131,8 @@ export function MessageView() {
         <div className="text-gray-500 text-center py-8">Loading...</div>
       ) : (
         <>
-          {/* Messages container auto scroll to bottom */}
           <div
-            className="flex-1 overflow-y-auto mb-5 flex flex-col space-y-2"
+            className="flex-1 overflow-y-auto mb-5 flex flex-col space-y-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800"
             ref={messagesContainerRef}
           >
             {messages.length === 0 ? (
@@ -139,7 +155,7 @@ export function MessageView() {
               onKeyDown={handleKeyPress}
             />
             <button
-              className="bg-black hover:bg-gray-800 text-white px-6 py-3 rounded-lg shadow-sm transition-colors duration-200 focus:outline-none"
+              className="bg-black text-white px-6 py-3 rounded-lg shadow-sm transition-colors duration-200 focus:outline-none"
               onClick={sendMessage}
             >
               Send

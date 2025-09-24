@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from sqlalchemy import UUID, DateTime, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 from src.database.core import Base
-from src.utils.default import generate_id
+from src.utils.default import generate_id, generate_timestamp
 
 
 class Message(Base):
@@ -25,5 +25,5 @@ class Message(Base):
         index=True,
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc)
+        DateTime(timezone=True), default=generate_timestamp
     )

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from enum import Enum
 
 from sqlalchemy import UUID, DateTime
@@ -7,7 +7,7 @@ from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 from src.channel.models import Channel, ChannelMember
 from src.database.core import Base
-from src.utils.default import generate_id
+from src.utils.default import generate_id, generate_timestamp
 
 
 class Guild(Base):
@@ -24,12 +24,12 @@ class Guild(Base):
         index=True,
     )
     created_at: Mapped[str] = mapped_column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc)
+        DateTime(timezone=True), default=generate_timestamp
     )
     updated_at: Mapped[str] = mapped_column(
         DateTime(timezone=True),
-        default=datetime.now(timezone.utc),
-        onupdate=datetime.now(timezone.utc),
+        default=generate_timestamp,
+        onupdate=generate_timestamp,
     )
 
 
@@ -85,5 +85,5 @@ class GuildInvite(Base):
     )
     expires_at: Mapped[str] = mapped_column(
         DateTime(timezone=True),
-        default=datetime.now(timezone.utc) + timedelta(days=7),
+        default=lambda: generate_timestamp(timedelta(days=7)),
     )

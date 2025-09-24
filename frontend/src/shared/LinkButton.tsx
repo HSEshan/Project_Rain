@@ -19,7 +19,7 @@ export default function LinkButton({
     <Link
       to={to}
       className={`w-full h-10 rounded-sm flex items-center justify-center ${className} ${
-        active ? "bg-blue-500" : "bg-gray-700"
+        active ? "bg-gray-800 text-blue-500" : "bg-gray-700 text-white"
       }`}
     >
       {children}

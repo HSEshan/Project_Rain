@@ -1,9 +1,9 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 from sqlalchemy import UUID, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
 from src.database.core import Base
-from src.utils.default import generate_id
+from src.utils.default import generate_id, generate_timestamp
 
 
 class Friendship(Base):
@@ -15,7 +15,7 @@ class Friendship(Base):
         UUID, ForeignKey("users.id"), primary_key=True, index=True
     )
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc)
+        DateTime(timezone=True), default=generate_timestamp
     )
 
 
@@ -27,5 +27,5 @@ class FriendRequest(Base):
     from_user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), index=True)
     to_user_id: Mapped[str] = mapped_column(UUID, ForeignKey("users.id"), index=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc)
+        DateTime(timezone=True), default=generate_timestamp
     )

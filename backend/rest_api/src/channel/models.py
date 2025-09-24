@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 from typing import Optional
 
@@ -7,7 +7,7 @@ from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 from src.database.core import Base
-from src.utils.default import generate_id
+from src.utils.default import generate_id, generate_timestamp
 
 
 class ChannelType(Enum):
@@ -29,7 +29,7 @@ class Channel(Base):
     )
     description: Mapped[Optional[str]] = mapped_column(String, index=True)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), default=datetime.now(timezone.utc)
+        DateTime(timezone=True), default=generate_timestamp
     )
 
 
