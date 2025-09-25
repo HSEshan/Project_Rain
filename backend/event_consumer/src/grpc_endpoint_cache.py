@@ -35,7 +35,11 @@ class GrpcEndpointCache:
         if cache_key in self.endpoint_cache:
             cached_time, endpoints = self.endpoint_cache[cache_key]
             if current_time - cached_time < self.cache_ttl:
-                logger.debug("Returning cached endpoints for %s", cache_key)
+                logger.debug(
+                    "Returning cached endpoints",
+                    user_id=receiver_id,
+                    cache_key=cache_key,
+                )
                 return endpoints
 
         # Fetch from Redis
@@ -48,7 +52,9 @@ class GrpcEndpointCache:
 
         # Cache with timestamp
         self.endpoint_cache[cache_key] = (current_time, endpoints)
-        logger.debug("Cache missed for %s, fetched %s from Redis", cache_key, endpoints)
+        logger.debug(
+            "Fetched endpoints from Redis", receiver_id=receiver_id, endpoints=endpoints
+        )
         return endpoints
 
     async def _cleanup_cache(self):
@@ -64,4 +70,7 @@ class GrpcEndpointCache:
             for key in expired_keys:
                 del self.endpoint_cache[key]
             if expired_keys:
-                logger.debug("Cleaned up %s expired cache entries", len(expired_keys))
+                logger.debug(
+                    "Cleaned up expired cache entries",
+                    num_expired_keys=len(expired_keys),
+                )

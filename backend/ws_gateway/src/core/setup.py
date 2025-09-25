@@ -1,14 +1,19 @@
 import asyncio
 from contextlib import asynccontextmanager
 
+import structlog
 from fastapi import APIRouter, FastAPI
+from sqlalchemy import text
 from src.api.router import router as websocket_router
 from src.core.config import settings
+from src.database.config import engine
 from src.event.event_dispatcher import event_dispatcher
 from src.event.event_queue import event_queue
 from src.grpc.grpc_server import serve_grpc_server
 from src.redis.redis_manager import RedisManager
 from src.websocket.manager import websocket_manager
+
+logger = structlog.get_logger()
 
 
 @asynccontextmanager
@@ -24,6 +29,12 @@ async def lifespan(app: FastAPI):
     event_dispatcher.set_redis_manager(redis_manager)
     event_dispatcher.set_websocket_manager(websocket_manager)
     await event_queue.start_batch_processor()
+    try:
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as e:
+        logger.error(f"Failed to connect to database: {e}")
+        raise e
 
     yield
 

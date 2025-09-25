@@ -82,11 +82,13 @@ class RedisManager:
 
     async def get_user_channel_ids(self, user_id: str) -> List[str]:
         key = RediKeys.user_channels(user_id)
+        channel_ids = []
         if await self.redis.exists(key):
             raw_ids = await self.redis.smembers(key)
-            decoded = [cid.decode() for cid in raw_ids]
-            logger.info(f"Redis cache for {user_id}: {decoded}")
-            return decoded
+            if raw_ids:
+                channel_ids = [cid.decode() for cid in raw_ids]
+                logger.info(f"Redis cache for {user_id}: {channel_ids}")
+                return channel_ids
 
         channel_ids = await self.query_user_channels_from_db(user_id)
         if channel_ids:

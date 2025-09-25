@@ -5,18 +5,18 @@ from typing import Dict, List
 
 import structlog
 from libs.event.schema import Event
-from src.core.config import settings
 from src.event.event_dispatcher import EventDispatcher
 
 logger = structlog.get_logger()
 
 BATCH_SIZE = 100
-BATCH_INTERVAL_MS = 0.1
+BATCH_INTERVAL_MS = 100
 
 
 class EventQueue:
     def __init__(self):
         self.batch: Dict[str, List[Event]] = defaultdict(list)
+        self.batch_size = 0
         self._batch_task: asyncio.Task | None = None
         self.event_dispatcher: EventDispatcher | None = None
 
@@ -37,6 +37,7 @@ class EventQueue:
 
     async def enqueue_event(self, event: Event):
         self.batch[event.event_type].append(event)
+        self.batch_size += 1
 
     async def _run_batch_loop(self):
         while True:
@@ -44,21 +45,21 @@ class EventQueue:
 
             # Wait for batch conditions
             while True:
-                total_events = sum(len(events) for events in self.batch.values())
                 elapsed = asyncio.get_event_loop().time() - start
 
                 # Exit if we have enough events OR time limit reached
-                if total_events >= BATCH_SIZE or elapsed >= (
-                    BATCH_INTERVAL_MS / 1000.0
-                ):
+                if self.batch_size >= BATCH_SIZE:
+                    break
+                if elapsed >= (BATCH_INTERVAL_MS / 1000.0):
                     break
 
-                await asyncio.sleep(0.001)
+                await asyncio.sleep(BATCH_INTERVAL_MS / 1000.0)
 
             # Process batches
             if self.batch:
                 await self.event_dispatcher.dispatch_events(deepcopy(self.batch))
                 self.batch.clear()
+                self.batch_size = 0
 
 
 event_queue = EventQueue()
