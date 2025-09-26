@@ -5,7 +5,7 @@ import { eventBus } from "../utils/EventBus";
 import { EventType, type EventPayload } from "../utils/eventType";
 
 interface MessageStore {
-  messages: Record<string, Message>; // messageId -> message
+  messages: Record<string, Message>; // messageId -> Message object
   byChannel: Record<string, string[]>; // channelId -> [messageIds]
 
   addMultipleMessages: (channelId: string, msgs: Message[]) => void;

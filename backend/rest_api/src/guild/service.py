@@ -5,6 +5,7 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.utils import CurrentUser
+from src.channel.models import Channel
 from src.database.core import get_db
 from src.database.service import BaseService
 from src.guild.models import (
@@ -14,6 +15,7 @@ from src.guild.models import (
     GuildMemberRole,
     GuildMemberStatus,
 )
+from src.guild.repository import GuildRepository
 from src.guild.schemas import GuildCreate
 from src.utils.exceptions import NotFoundException
 
@@ -24,37 +26,12 @@ class GuildService(BaseService):
 
     async def create_guild(self, user: CurrentUser, guild: GuildCreate) -> Guild:
         async with self.db.begin():
-            new_guild = Guild(
-                name=guild.name,
-                description=guild.description,
-                owner_id=user.id,
-            )
-            self.db.add(new_guild)
-            await self.db.flush()
-            await self.db.refresh(new_guild)
-
-            guild_member = GuildMember(
-                guild_id=new_guild.id,
-                user_id=user.id,
-                status=GuildMemberStatus.ACTIVE,
-                role=GuildMemberRole.ADMIN,
-            )
-
-            self.db.add(guild_member)
-            await self.db.flush()
-            await self.db.refresh(guild_member)
-
+            new_guild = await GuildRepository.create_guild(self.db, guild, user)
         return new_guild
 
     async def get_user_guilds(self, user: CurrentUser) -> list[Guild]:
-        user_guilds = await self.db.execute(
-            select(Guild).where(
-                Guild.id.in_(
-                    select(GuildMember.guild_id).where(GuildMember.user_id == user.id)
-                )
-            )
-        )
-        return user_guilds.scalars().all()
+        user_guilds = await GuildRepository.get_user_guilds(self.db, user.id)
+        return user_guilds
 
     async def get_guild_by_id(self, guild_id: str) -> Guild:
         guild = await self.db.execute(select(Guild).where(Guild.id == guild_id))
@@ -150,6 +127,10 @@ class GuildService(BaseService):
             select(GuildMember).where(GuildMember.guild_id == guild_id)
         )
         return guild_members.scalars().all()
+
+    async def get_guild_channels(self, guild_id: str) -> list[Channel]:
+        guild_channels = await GuildRepository.get_guild_channels(self.db, guild_id)
+        return guild_channels
 
 
 def get_guild_service(db: AsyncSession = Depends(get_db)):

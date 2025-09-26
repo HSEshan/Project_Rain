@@ -3,8 +3,6 @@ services:
     image: redis:7
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
@@ -13,14 +11,10 @@ services:
 
   postgres:
     image: postgres:16
-    ports:
-      - "5432:5432"
-    environment:
-      - POSTGRES_USER=superuser
-      - POSTGRES_PASSWORD=superuser1
-      - POSTGRES_DB=devdb
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    env_file:
+      - ./postgres.dev.env
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "superuser", "-d", "devdb"]
       interval: 2s
@@ -35,13 +29,14 @@ services:
       - redis
       - postgres
     env_file:
-      - ./backend/rest_api/development.env
-    environment:
-      - ENVIRONMENT=development
-      - LOG_LEVEL=DEBUG
-      - LOG_FORMAT=pretty
+      - ./rest_api.dev.env
     volumes:
       - ./backend/rest_api:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   ws_gateway:
     build:
@@ -51,14 +46,14 @@ services:
       - redis
       - postgres
     env_file:
-      - ./backend/ws_gateway/development.env
-    environment:
-      - ENVIRONMENT=development
-      - GRPC_HOST=ws_gateway
-      - LOG_FORMAT=pretty
-      - LOG_LEVEL=DEBUG
+      - ./ws_gateway.dev.env
     volumes:
       - ./backend/ws_gateway:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   event_consumer:
     build:
@@ -67,10 +62,8 @@ services:
     depends_on:
       - redis
       - postgres
-    environment:
-      - ENVIRONMENT=development
-      - LOG_FORMAT=pretty
-      - LOG_LEVEL=DEBUG
+    env_file:
+      - ./event_consumer.dev.env
     volumes:
       - ./backend/event_consumer:/app
 
@@ -81,10 +74,8 @@ services:
     depends_on:
       - redis
       - postgres
-    environment:
-      - ENVIRONMENT=development
-      - LOG_FORMAT=pretty
-      - LOG_LEVEL=DEBUG
+    env_file:
+      - ./lease_manager.dev.env
     volumes:
       - ./backend/lease_manager:/app
 

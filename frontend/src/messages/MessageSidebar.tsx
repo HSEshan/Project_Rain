@@ -9,12 +9,12 @@ import { useMessageStore } from "../shared/messageStore";
 import { PiUserCircle } from "react-icons/pi";
 
 export function MessageSidebar() {
-  const { getAllChannels, getParticipants } = useChannelStore();
+  const { getDMChannels, getParticipants } = useChannelStore();
   const { fetchChannelMessages } = useMessageStore();
   const { setIsModalOpen } = useFriendRequestStore();
   const { getUser: getUserFromStore } = useUserStore();
   const { dmId } = useParams<{ dmId: string }>();
-  const channels = getAllChannels();
+  const channels = getDMChannels();
 
   useEffect(() => {
     if (dmId) {

@@ -8,7 +8,10 @@ class Settings(BaseSettings):
     REDIS_PORT: int
     REDIS_DB: int
     DEFAULT_TTL_SECONDS: int
+
     NUM_SHARDS: int
+    BATCH_SIZE: int
+    BATCH_INTERVAL_MS: int
 
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str

@@ -5,12 +5,10 @@ from typing import Dict, List
 
 import structlog
 from libs.event.schema import Event
+from src.core.config import settings
 from src.event.event_dispatcher import EventDispatcher
 
 logger = structlog.get_logger()
-
-BATCH_SIZE = 100
-BATCH_INTERVAL_MS = 100
 
 
 class EventQueue:
@@ -48,12 +46,12 @@ class EventQueue:
                 elapsed = asyncio.get_event_loop().time() - start
 
                 # Exit if we have enough events OR time limit reached
-                if self.batch_size >= BATCH_SIZE:
+                if self.batch_size >= settings.BATCH_SIZE:
                     break
-                if elapsed >= (BATCH_INTERVAL_MS / 1000.0):
+                if elapsed >= (settings.BATCH_INTERVAL_MS / 1000.0):
                     break
 
-                await asyncio.sleep(BATCH_INTERVAL_MS / 1000.0)
+                await asyncio.sleep(settings.BATCH_INTERVAL_MS / 1000.0)
 
             # Process batches
             if self.batch:

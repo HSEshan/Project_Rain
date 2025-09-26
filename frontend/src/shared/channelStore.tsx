@@ -12,7 +12,8 @@ interface ChannelStore {
   removeChannel: (channelId: string) => void;
 
   getChannel: (channelId: string) => Channel | undefined;
-  getAllChannels: () => Channel[];
+  getDMChannels: () => Channel[];
+  getGuildChannels: (guildId: string) => Channel[];
   getParticipants: (channelId: string) => string[];
   setParticipants: (channelId: string, participants: string[]) => void;
 
@@ -47,7 +48,11 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
 
   getChannel: (channelId) => get().channels[channelId],
 
-  getAllChannels: () => Object.values(get().channels),
+  getDMChannels: () =>
+    Object.values(get().channels).filter((ch) => ch.type === ChannelType.DM),
+
+  getGuildChannels: (guildId) =>
+    Object.values(get().channels).filter((ch) => ch.guild_id === guildId),
 
   getParticipants: (channelId) => get().participants[channelId] ?? [],
 

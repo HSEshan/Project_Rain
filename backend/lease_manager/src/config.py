@@ -4,10 +4,10 @@ from dataclasses import dataclass, fields
 
 @dataclass
 class Config:
-    redis_host: str = os.getenv("REDIS_HOST", "redis")
-    redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
-    redis_db: int = int(os.getenv("REDIS_DB", "0"))
-    num_streams: int = int(os.getenv("NUM_STREAMS", "64"))
+    redis_host: str = os.getenv("REDIS_HOST")
+    redis_port: int = int(os.getenv("REDIS_PORT"))
+    redis_db: int = int(os.getenv("REDIS_DB"))
+    num_streams: int = int(os.getenv("NUM_STREAMS"))
 
     def __post_init__(self):
         missing_vars = []
