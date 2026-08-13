@@ -14,7 +14,9 @@ class MessageService(BaseService):
     ) -> list[Message]:
         await ChannelRepository.check_channel_member(self.db, user.id, channel_id)
         result = await self.db.execute(
-            select(Message).where(Message.channel_id == channel_id)
+            select(Message)
+            .where(Message.channel_id == channel_id)
+            .order_by(Message.created_at)
         )
         return result.scalars().all()
 

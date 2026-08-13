@@ -30,7 +30,9 @@ class FriendshipService(BaseService):
             self.db, user_id
         )
 
-    async def accept_friend_request(self, user_id: str, friend_request_id: str) -> bool:
+    async def accept_friend_request(
+        self, user_id: str, friend_request_id: str
+    ) -> FriendRequestAccept:
         async with self.db.begin():
             friendship = await FriendshipRepository.accept_friend_request(
                 self.db, user_id, friend_request_id
@@ -42,12 +44,23 @@ class FriendshipService(BaseService):
                     user_id2=str(friendship.user_2_id),
                 ),
             )
-        return True
+            # The caller needs the new channel to update its store without a refetch
+            friend_id = (
+                str(friendship.user_2_id)
+                if str(friendship.user_1_id) == str(user_id)
+                else str(friendship.user_1_id)
+            )
+            accepted = FriendRequestAccept(
+                friend_id=friend_id,
+                dm_channel_id=str(dm_channel.id),
+            )
+        return accepted
 
     async def reject_friend_request(self, user_id: str, friend_request_id: str) -> bool:
-        return await FriendshipRepository.reject_friend_request(
-            self.db, user_id, friend_request_id
-        )
+        async with self.db.begin():
+            return await FriendshipRepository.reject_friend_request(
+                self.db, user_id, friend_request_id
+            )
 
     async def get_user_friends(self, user_id: str) -> list[User]:
         return await FriendshipRepository.get_user_friends(self.db, user_id)

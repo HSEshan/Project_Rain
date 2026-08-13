@@ -8,11 +8,19 @@ from src.channel.schemas import DMChannelCreate, GuildChannelCreate
 from src.database.core import get_db
 from src.database.service import BaseService
 from src.guild.models import GuildMember, GuildMemberRole
-from src.utils.exceptions import NotFoundException
+from src.utils.exceptions import ForbiddenException, NotFoundException
 
 
 class ChannelService(BaseService):
-    async def create_dm_channel(self, channel_create: DMChannelCreate) -> Channel:
+    async def create_dm_channel(
+        self, user: CurrentUser, channel_create: DMChannelCreate
+    ) -> Channel:
+        if str(user.id) not in (
+            str(channel_create.user_id),
+            str(channel_create.user_id2),
+        ):
+            raise ForbiddenException("You cannot create a DM you are not part of")
+
         async with self.db.begin():
             new_channel = await ChannelRepository.create_dm_channel(
                 self.db, channel_create
@@ -23,17 +31,17 @@ class ChannelService(BaseService):
     async def create_guild_channel(
         self, user: CurrentUser, guild_id: str, channel_create: GuildChannelCreate
     ) -> Channel:
-        # Check if user is admin of the guild
-        guild_member = await self.db.execute(
-            select(GuildMember).where(
-                GuildMember.guild_id == guild_id, GuildMember.user_id == user.id
-            )
-        )
-        result = guild_member.scalar_one_or_none()
-        if not result or result.role != GuildMemberRole.ADMIN:
-            raise NotFoundException("You are not an admin of this guild")
-
         async with self.db.begin():
+            # Only guild admins may add channels
+            guild_member = await self.db.execute(
+                select(GuildMember).where(
+                    GuildMember.guild_id == guild_id, GuildMember.user_id == user.id
+                )
+            )
+            result = guild_member.scalar_one_or_none()
+            if not result or result.role != GuildMemberRole.ADMIN:
+                raise ForbiddenException("You are not an admin of this guild")
+
             new_channel = Channel(
                 name=channel_create.name,
                 type=channel_create.type,
@@ -44,6 +52,7 @@ class ChannelService(BaseService):
             await self.db.flush()
             await self.db.refresh(new_channel)
 
+            # Every guild member gets membership of the new channel
             guild_member_ids = await self.db.execute(
                 select(GuildMember.user_id).where(GuildMember.guild_id == guild_id)
             )
@@ -54,10 +63,10 @@ class ChannelService(BaseService):
                 ]
             )
             await self.db.flush()
-            await self.db.refresh(new_channel)
         return new_channel
 
-    async def get_channel_by_id(self, channel_id: str) -> Channel:
+    async def get_channel_by_id(self, user: CurrentUser, channel_id: str) -> Channel:
+        await ChannelRepository.check_channel_member(self.db, user.id, channel_id)
         channel = await self.db.execute(select(Channel).where(Channel.id == channel_id))
         result = channel.scalar_one_or_none()
         if not result:

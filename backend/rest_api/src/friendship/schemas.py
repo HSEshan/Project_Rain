@@ -7,5 +7,5 @@ class FriendRequestCreate(BaseModel):
 
 
 class FriendRequestAccept(BaseModel):
-    friendship: dict
-    dm_channel: dict
+    friend_id: str
+    dm_channel_id: str

@@ -1,46 +1,59 @@
 import { useFriendRequestStore } from "./friendRequestStore";
 import { useUserStore } from "../shared/userStore";
+import { useChannelStore } from "../shared/channelStore";
 import { useState } from "react";
 import { acceptFriendRequest, rejectFriendRequest } from "./apiClient";
 
 export default function FriendRequestList() {
   const { friendRequests, removeFriendRequest } = useFriendRequestStore();
-  const { getUser: getUserFromStore } = useUserStore();
+  const { getUser: getUserFromStore, fetchUsers } = useUserStore();
+  const { fetchUserChannels, setParticipants } = useChannelStore();
   const [response, setResponse] = useState<string>("");
 
   const namedFriendRequests = friendRequests.map((friendRequest) => {
     return {
       id: friendRequest.id,
-      from_user_name: getUserFromStore(friendRequest.from_user_id)?.username,
+      from_user_name:
+        getUserFromStore(friendRequest.from_user_id)?.username ?? "Loading...",
     };
   });
-  const handleAccept = (id: string) => {
-    acceptFriendRequest(id)
-      .then((res) => {
-        if (res.status === 200) {
-          setResponse("Friend request accepted");
-          removeFriendRequest(id);
-        }
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+
+  const handleAccept = async (id: string) => {
+    try {
+      const res = await acceptFriendRequest(id);
+      removeFriendRequest(id);
+      setResponse("Friend request accepted");
+
+      // The new DM has to show up without a page reload
+      const { friend_id, dm_channel_id } = res.data;
+      await fetchUserChannels();
+      setParticipants(dm_channel_id, [friend_id]);
+      await fetchUsers([friend_id]);
+    } catch (error) {
+      console.error(error);
+      setResponse("Could not accept that friend request");
+    }
   };
-  const handleReject = (id: string) => {
-    rejectFriendRequest(id)
-      .then((res) => {
-        if (res.status === 200) {
-          setResponse("Friend request rejected");
-          removeFriendRequest(id);
-        }
-      })
-      .catch((error) => {
-        console.error(error);
-      });
+
+  const handleReject = async (id: string) => {
+    try {
+      await rejectFriendRequest(id);
+      removeFriendRequest(id);
+      setResponse("Friend request rejected");
+    } catch (error) {
+      console.error(error);
+      setResponse("Could not reject that friend request");
+    }
   };
+
   return (
     <div className="flex flex-col gap-2">
       {response && <p className="text-center text-sm">{response}</p>}
+      {namedFriendRequests.length === 0 && (
+        <p className="text-center text-sm text-gray-400">
+          No pending friend requests
+        </p>
+      )}
       {namedFriendRequests.map((friendRequest) => (
         <div
           key={friendRequest.id}

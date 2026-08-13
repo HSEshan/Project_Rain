@@ -1,8 +1,4 @@
-from typing import Optional
-
 from pydantic import BaseModel
-from src.channel.models import ChannelType
-from src.guild.models import GuildMemberStatus
 
 
 class GuildCreate(BaseModel):
@@ -17,16 +13,9 @@ class GuildUpdate(BaseModel):
 
 
 class GuildMemberInvite(BaseModel):
-    guild_id: str
     user_id: str
 
 
 class GuildMemberRemove(BaseModel):
     guild_id: str
     member_id: str
-
-
-class GuildChannelCreate(BaseModel):
-    type: ChannelType
-    name: str
-    description: Optional[str] = None

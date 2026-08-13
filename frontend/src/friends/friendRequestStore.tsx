@@ -15,7 +15,8 @@ export interface FriendRequestStore {
   removeFriendRequest: (id: string) => void;
   isModalOpen: boolean;
   setIsModalOpen: (isModalOpen: boolean) => void;
-  fetchFriendRequests: () => void;
+  fetchFriendRequests: () => Promise<void>;
+  reset: () => void;
 }
 
 export const useFriendRequestStore = create<FriendRequestStore>((set) => ({
@@ -37,4 +38,6 @@ export const useFriendRequestStore = create<FriendRequestStore>((set) => ({
     const friendRequests = await getUserFriendRequests();
     set({ friendRequests: friendRequests.data });
   },
+
+  reset: () => set({ friendRequests: [], isModalOpen: false }),
 }));

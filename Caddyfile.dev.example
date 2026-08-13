@@ -1,0 +1,39 @@
+# Dev edge for `docker compose up`. Copy to `Caddyfile` (gitignored):
+#   cp Caddyfile.dev.example Caddyfile
+#
+# Use Caddyfile.example instead when running docker-compose-prod.yml, where the
+# frontend is a built bundle served by nginx on :80 rather than Vite on :5173.
+
+:8080 {
+    encode gzip
+
+    # --- API (HTTP) --- rest_api sets root_path=/api, so strip the prefix here
+    handle_path /api/* {
+        reverse_proxy rest_api:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # --- WebSocket endpoint --- ws_gateway serves the socket on "/"
+    handle_path /ws* {
+        reverse_proxy ws_gateway:8000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # --- Everything else -> Vite dev server (also carries HMR over websocket) ---
+    handle /* {
+        reverse_proxy frontend:5173 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}

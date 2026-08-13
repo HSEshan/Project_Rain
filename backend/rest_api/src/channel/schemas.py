@@ -11,6 +11,5 @@ class DMChannelCreate(BaseModel):
 
 class GuildChannelCreate(BaseModel):
     type: ChannelType
-    name: Optional[str] = None
-    guild_id: Optional[str] = None
+    name: str
     description: Optional[str] = None

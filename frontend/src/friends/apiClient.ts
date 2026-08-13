@@ -35,12 +35,17 @@ export const createFriendRequest = async (
   }
 };
 
+export type FriendRequestAccepted = {
+  friend_id: string;
+  dm_channel_id: string;
+};
+
 export const acceptFriendRequest = async (
   friend_request_id: string
-): Promise<AxiosResponse> => {
+): Promise<AxiosResponse<FriendRequestAccepted>> => {
   try {
     const response = await apiClient.post(
-      `friendship/friends/request/${friend_request_id}/accept`
+      `/friendship/friends/request/${friend_request_id}/accept`
     );
     return response;
   } catch (error) {
@@ -54,7 +59,7 @@ export const rejectFriendRequest = async (
 ): Promise<AxiosResponse> => {
   try {
     const response = await apiClient.post(
-      `friendship/friends/request/${friend_request_id}/reject`
+      `/friendship/friends/request/${friend_request_id}/reject`
     );
     return response;
   } catch (error) {

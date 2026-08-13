@@ -5,12 +5,21 @@ import logoutIcon from "../assets/logout_icon.svg";
 import { PiUserCircle } from "react-icons/pi";
 import { PiShield } from "react-icons/pi";
 import { RiHome2Line } from "react-icons/ri";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
+import { resetAllStores } from "../shared/resetStores";
 
 export function Sidebar() {
-  const { isConnected } = useWebSocket();
+  const { isConnected, disconnect } = useWebSocket();
   const { logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    disconnect();
+    resetAllStores();
+    logout();
+    navigate("/login", { replace: true });
+  };
 
   return (
     <div className="w-20 bg-gray-900 text-white flex flex-col items-center py-4 gap-4">
@@ -40,7 +49,7 @@ export function Sidebar() {
       >
         <PiShield size={30} />
       </SideBarButton>
-      <SideBarButton onClick={logout} toolTipText="Logout">
+      <SideBarButton onClick={handleLogout} toolTipText="Logout">
         {<img src={logoutIcon} alt="Logout" />}
       </SideBarButton>
     </div>

@@ -18,6 +18,14 @@ interface MessageStore {
   fetchChannelMessages: (channelId: string) => void;
 }
 
+// created_at is an ISO string; ties are broken by id so ordering is stable
+const sortByCreatedAt = (ids: string[], messages: Record<string, Message>) =>
+  [...ids].sort((a, b) => {
+    const diff =
+      Date.parse(messages[a].created_at) - Date.parse(messages[b].created_at);
+    return diff !== 0 ? diff : messages[a].id.localeCompare(messages[b].id);
+  });
+
 export const useMessageStore = create<MessageStore>((set, get) => ({
   messages: {},
   byChannel: {},
@@ -36,24 +44,26 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         ...new Set([...existingIds, ...msgs.map((m) => m.id)]),
       ];
 
-      newByChannel[channelId] = mergedIds.sort(
-        (a, b) =>
-          (newMessages[a].created_at as unknown as number) -
-          (newMessages[b].created_at as unknown as number)
-      );
+      newByChannel[channelId] = sortByCreatedAt(mergedIds, newMessages);
 
       return { messages: newMessages, byChannel: newByChannel };
     }),
 
   addMessage: (msg) =>
     set((state) => {
+      // REST hydration and the WS echo can both deliver the same message
+      if (state.messages[msg.id]) return state;
+
       const newMessages = { ...state.messages, [msg.id]: msg };
       const existingIds = state.byChannel[msg.channel_id] ?? [];
       return {
         messages: newMessages,
         byChannel: {
           ...state.byChannel,
-          [msg.channel_id]: [...existingIds, msg.id],
+          [msg.channel_id]: sortByCreatedAt(
+            [...existingIds, msg.id],
+            newMessages
+          ),
         },
       };
     }),

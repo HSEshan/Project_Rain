@@ -1,4 +1,4 @@
-from sqlalchemy import or_, select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.friendship.models import FriendRequest, Friendship
 from src.friendship.schemas import FriendRequestCreate
@@ -15,11 +15,33 @@ class FriendshipRepository:
         to_user = await UserRepository.get_user_by_username(
             db, friend_request.to_username
         )
+        if str(to_user.id) == str(friend_request.from_user_id):
+            raise AlreadyExistsException("You cannot add yourself as a friend")
+
         check_friendship = await FriendshipRepository.get_friendship_by_user_ids(
             db, friend_request.from_user_id, to_user.id
         )
         if check_friendship:
             raise AlreadyExistsException("Friendship already exists")
+
+        # A request in either direction means one is already pending
+        existing_request = await db.execute(
+            select(FriendRequest).where(
+                or_(
+                    and_(
+                        FriendRequest.from_user_id == friend_request.from_user_id,
+                        FriendRequest.to_user_id == to_user.id,
+                    ),
+                    and_(
+                        FriendRequest.from_user_id == to_user.id,
+                        FriendRequest.to_user_id == friend_request.from_user_id,
+                    ),
+                )
+            )
+        )
+        if existing_request.scalar_one_or_none():
+            raise AlreadyExistsException("A friend request is already pending")
+
         new_friend_request = FriendRequest(
             from_user_id=friend_request.from_user_id,
             to_user_id=to_user.id,
@@ -27,7 +49,6 @@ class FriendshipRepository:
         db.add(new_friend_request)
         await db.flush()
         await db.refresh(new_friend_request)
-        await db.commit()
         return new_friend_request
 
     @staticmethod
@@ -85,7 +106,7 @@ class FriendshipRepository:
             raise NotFoundException(f"You are not the recipient of this friend request")
 
         await db.delete(friend_request)
-        await db.commit()
+        await db.flush()
         return True
 
     @staticmethod

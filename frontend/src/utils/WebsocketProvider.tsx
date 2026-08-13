@@ -16,6 +16,7 @@ interface WebSocketContextType {
   isConnected: boolean;
   isConnecting: boolean;
   reconnect: () => void;
+  disconnect: () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextType | null>(null);
@@ -113,6 +114,24 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
     }, delay);
   }, [connect]);
 
+  const disconnect = useCallback(() => {
+    console.log("🔌 Closing WebSocket connection");
+    shouldReconnectRef.current = false;
+    retryCountRef.current = 0;
+
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+    setIsConnected(false);
+    setIsConnecting(false);
+  }, []);
+
   const reconnect = useCallback(() => {
     console.log("🔄 Manual reconnection requested");
     retryCountRef.current = 0;
@@ -148,6 +167,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
     isConnected,
     isConnecting,
     reconnect,
+    disconnect,
   };
 
   return (

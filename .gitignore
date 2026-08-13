@@ -76,3 +76,8 @@ promtail/
 ghcr_config.json
 image_publisher.ps1
 Caddyfile
+
+# Others
+AGENTS.md
+tasks.md
+timeline.md

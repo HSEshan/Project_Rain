@@ -8,9 +8,11 @@ export interface GuildStore {
   setGuilds: (guilds: Guild[]) => void;
   setGuildChannels: (guildChannelIds: Record<string, string[]>) => void;
   getGuildChannels: (guildId: string) => string[];
+  addGuild: (guild: Guild) => void;
   modalOpen: boolean;
   setModalOpen: (modalOpen: boolean) => void;
   fetchUserGuilds: () => Promise<void>;
+  reset: () => void;
 }
 
 export const useGuildStore = create<GuildStore>((set, get) => ({
@@ -19,6 +21,12 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
   setGuildChannels: (guildChannelIds) => set({ guildChannelIds }),
   getGuildChannels: (guildId) => get().guildChannelIds[guildId] ?? [],
   setGuilds: (guilds) => set({ guilds }),
+  addGuild: (guild) =>
+    set((state) =>
+      state.guilds.some((g) => g.id === guild.id)
+        ? state
+        : { guilds: [...state.guilds, guild] }
+    ),
   modalOpen: false,
   setModalOpen: (modalOpen) => set({ modalOpen }),
   fetchUserGuilds: async () => {
@@ -29,4 +37,6 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
       console.error("Failed to fetch guilds:", error);
     }
   },
+
+  reset: () => set({ guilds: [], guildChannelIds: {}, modalOpen: false }),
 }));

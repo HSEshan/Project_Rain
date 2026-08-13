@@ -26,14 +26,23 @@ services:
       context: ./backend
       dockerfile: rest_api/Dockerfile
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     env_file:
       - ./rest_api.dev.env
     volumes:
       - ./backend/rest_api:/app
+    # python:slim has no curl, so the check is done with the stdlib
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -43,14 +52,22 @@ services:
       context: ./backend
       dockerfile: ws_gateway/Dockerfile
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     env_file:
       - ./ws_gateway.dev.env
     volumes:
       - ./backend/ws_gateway:/app
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -60,8 +77,8 @@ services:
       context: ./backend
       dockerfile: event_consumer/Dockerfile
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
     env_file:
       - ./event_consumer.dev.env
     volumes:
@@ -72,8 +89,8 @@ services:
       context: ./backend
       dockerfile: lease_manager/Dockerfile
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
     env_file:
       - ./lease_manager.dev.env
     volumes:

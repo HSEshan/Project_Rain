@@ -17,9 +17,10 @@ async def get_user_guilds(
 @router.get("/{guild_id}", status_code=status.HTTP_200_OK)
 async def get_guild_by_id(
     guild_id: str,
+    user: user_dependency,
     guild_service: GuildService = Depends(get_guild_service),
 ):
-    return await guild_service.get_guild_by_id(guild_id)
+    return await guild_service.get_guild_for_user(user, guild_id)
 
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
@@ -33,12 +34,13 @@ async def create_guild(
 
 @router.post("/{guild_id}/invite", status_code=status.HTTP_201_CREATED)
 async def create_guild_invite(
+    guild_id: str,
     invite: GuildMemberInvite,
     current_user: user_dependency,
     guild_service: GuildService = Depends(get_guild_service),
 ):
     return await guild_service.create_guild_invite(
-        current_user, user_to_invite=invite.user_id, guild_id=invite.guild_id
+        current_user, user_to_invite=invite.user_id, guild_id=guild_id
     )
 
 

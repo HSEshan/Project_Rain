@@ -29,16 +29,17 @@ async def create_dm_channel(
     user: user_dependency,
     channel_service: ChannelService = Depends(get_channel_service),
 ):
-    return await channel_service.create_dm_channel(channel_create)
+    return await channel_service.create_dm_channel(user, channel_create)
 
 
-@router.post("/guild", status_code=status.HTTP_201_CREATED)
+@router.post("/guild/{guild_id}", status_code=status.HTTP_201_CREATED)
 async def create_guild_channel(
+    guild_id: str,
     channel_create: GuildChannelCreate,
     user: user_dependency,
     channel_service: ChannelService = Depends(get_channel_service),
 ):
-    return await channel_service.create_guild_channel(user, channel_create)
+    return await channel_service.create_guild_channel(user, guild_id, channel_create)
 
 
 @router.get("/{channel_id}", status_code=status.HTTP_200_OK)

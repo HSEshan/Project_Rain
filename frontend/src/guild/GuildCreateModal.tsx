@@ -1,11 +1,13 @@
 import { useState, useRef } from "react";
 import { useGuildStore } from "./guildStore";
+import { useChannelStore } from "../shared/channelStore";
 import Modal from "../shared/Modal";
 import { postCreateGuild } from "./apiClient";
 import type { AxiosResponse } from "axios";
 
 export default function GuildCreateModal() {
-  const { modalOpen, setModalOpen, setGuilds, guilds } = useGuildStore();
+  const { modalOpen, setModalOpen, addGuild } = useGuildStore();
+  const { fetchUserChannels } = useChannelStore();
   const guildNameRef = useRef<HTMLInputElement>(null);
   const guildDescriptionRef = useRef<HTMLTextAreaElement>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -20,8 +22,10 @@ export default function GuildCreateModal() {
       name: guildNameRef.current?.value || "",
       description: guildDescriptionRef.current?.value || "",
     })
-      .then((res: AxiosResponse) => {
-        setGuilds([...guilds, res.data]);
+      .then(async (res: AxiosResponse) => {
+        addGuild(res.data);
+        // The guild ships with general-text / general-voice; pull them in
+        await fetchUserChannels();
         setModalOpen(false);
       })
       .catch((err: Error) => {

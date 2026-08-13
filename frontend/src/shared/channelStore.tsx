@@ -17,8 +17,9 @@ interface ChannelStore {
   getParticipants: (channelId: string) => string[];
   setParticipants: (channelId: string, participants: string[]) => void;
 
-  fetchUserChannels: () => void;
-  fetchDMChannelParticipants: () => void;
+  fetchUserChannels: () => Promise<void>;
+  fetchDMChannelParticipants: () => Promise<void>;
+  reset: () => void;
 }
 
 export const useChannelStore = create<ChannelStore>((set, get) => ({
@@ -102,4 +103,6 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
     });
     console.log("Participants set in store");
   },
+
+  reset: () => set({ channels: {}, participants: {} }),
 }));
