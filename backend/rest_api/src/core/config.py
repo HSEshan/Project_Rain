@@ -27,6 +27,13 @@ class SettingsFactory(BaseSettings):
     SUPERUSER_PASSWORD: str
     DOCS: bool
 
+    # Realtime publishing. NUM_SHARDS must match the gateway's NUM_SHARDS and
+    # the consumer/lease manager's NUM_STREAMS.
+    REDIS_HOST: str = "redis"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    NUM_SHARDS: int = 16
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

@@ -2,6 +2,8 @@ import { create } from "zustand";
 import type { Channel } from "./types";
 import { getChannelParticipants, getUserChannels } from "./channelApiClient";
 import { ChannelType } from "./types";
+import { eventBus } from "../utils/EventBus";
+import { EventType, type EventPayload } from "../utils/eventType";
 
 interface ChannelStore {
   channels: Record<string, Channel>; // store metadata only
@@ -13,6 +15,7 @@ interface ChannelStore {
 
   getChannel: (channelId: string) => Channel | undefined;
   getDMChannels: () => Channel[];
+  getDMChannelWithUser: (userId: string) => Channel | undefined;
   getGuildChannels: (guildId: string) => Channel[];
   getParticipants: (channelId: string) => string[];
   setParticipants: (channelId: string, participants: string[]) => void;
@@ -51,6 +54,11 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
 
   getDMChannels: () =>
     Object.values(get().channels).filter((ch) => ch.type === ChannelType.DM),
+
+  getDMChannelWithUser: (userId) =>
+    get()
+      .getDMChannels()
+      .find((ch) => get().getParticipants(ch.id).includes(userId)),
 
   getGuildChannels: (guildId) =>
     Object.values(get().channels).filter((ch) => ch.guild_id === guildId),
@@ -106,3 +114,16 @@ export const useChannelStore = create<ChannelStore>((set, get) => ({
 
   reset: () => set({ channels: {}, participants: {} }),
 }));
+
+/**
+ * rest_api publishes a notification whenever the signed-in user's channel
+ * membership changes (friend accepted, guild joined or left, channel created).
+ * Refetching is cheap and always correct, unlike patching the store per action.
+ */
+eventBus.on(EventType.NOTIFICATION, async (event: EventPayload) => {
+  const metadata = event.metadata as { channels_changed?: boolean } | undefined;
+  if (!metadata?.channels_changed) return;
+
+  await useChannelStore.getState().fetchUserChannels();
+  await useChannelStore.getState().fetchDMChannelParticipants();
+});

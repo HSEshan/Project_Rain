@@ -1,73 +1,103 @@
-## Project_ZeroTrace
+# Project Rain
 
-### ⚙️ Backend Setup
+A self-hosted chat platform in the shape of Discord: direct messages, friends,
+guilds with text channels, and a realtime event pipeline built to survive more
+than one gateway instance. Voice is not implemented yet.
 
-1. Navigate to the backend directory:
+## Architecture
 
-   ```bash
-   cd backend
-   ```
+```
+Browser
+  HTTP  /api/*          -> Caddy -> rest_api:8000   -> Postgres
+  WS    /ws?token=JWT   -> Caddy -> ws_gateway:8000 -> Postgres (message persist)
+                                                    -> Redis stream_shard:{n}
+event_consumer   reads the shards it holds a lease on
+                 -> gRPC SendEvents -> ws_gateway:6000
+                 -> websocket frames to that instance's clients
+lease_manager    heartbeats + lease assignment (shard -> consumer)
+```
 
-2. Create a virtual environment and activate it:
+| Service | Role |
+|---------|------|
+| `backend/rest_api` | FastAPI CRUD: auth, users, guilds, channels, friends, message history. Owns the database schema. |
+| `backend/ws_gateway` | Websocket ingress, message persistence, publishes to Redis streams, gRPC server for inbound delivery. |
+| `backend/event_consumer` | Reads leased stream shards, fans events out to the gateway holding each recipient. |
+| `backend/lease_manager` | Assigns stream shards to live consumers. |
+| `backend/libs` | Shared package: event schema/proto/codec, the Redis key helpers, structlog setup, and the SQLAlchemy models (`libs.db`). |
+| `frontend` | React 19 + Vite 7 + TypeScript + Zustand + Tailwind. |
 
-   ```bash
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
+`rest_api` and `ws_gateway` import their ORM models from `libs.db` — one
+definition, one engine configuration. `event_consumer` and `lease_manager`
+install `libs` without the `db` extra and never touch Postgres.
 
-3. Install dependencies:
+## Running it
 
-   ```bash
-   pip install -r requirements.txt
-   ```
+Docker Compose is the supported path. There is no standalone
+`uvicorn` / `npm run dev` setup: the frontend talks to `/api` and `/ws` on the
+same origin, and Caddy is what provides that origin.
 
-4. Create and configure development.env (see .env.example)
+```bash
+python generate_env_files.py
+```
 
-5. Run database migrations (using SQLAlchemy/Alembic, assuming setup):
+Writes the gitignored `*.dev.env` files, including one `SECRET_KEY` shared by
+`rest_api` and `ws_gateway` (they must agree or the websocket rejects every
+token). It prompts on stdin; for a non-interactive run use
+`python -c "import generate_env_files as g; g.main()"`.
 
-   ```bash
-   alembic upgrade head
-   ```
+```bash
+cp Caddyfile.dev.example Caddyfile
+```
 
-6. Run tests:
-   ```
-   python -m pytest -vv
-   ```
-7. Start the FastAPI server:
-   ```bash
-   uvicorn main:app --reload
-   ```
+`Caddyfile` itself is gitignored. Use `Caddyfile.dev.example` for local work
+(`:8080`, frontend proxied to Vite on `:5173`); `Caddyfile.example` is the
+production edge and will not work with `docker-compose.yml`.
 
-### 🖥 Frontend Setup
+```bash
+docker compose up --build
+```
 
-1. Navigate to the frontend directory:
+The app is on <http://localhost:8080>. Eight containers should report healthy:
+postgres, redis, rest_api, ws_gateway, event_consumer, lease_manager, frontend,
+edge.
 
-   ```bash
-   cd frontend
-   ```
+## Database schema
 
-2. Install dependencies:
+Alembic owns the schema. `rest_api` runs `upgrade head` during startup and is
+the only service that migrates; `ws_gateway` waits for it to become healthy.
 
-   ```bash
-   npm install
-   ```
+```bash
+docker compose exec rest_api alembic revision --autogenerate -m "what changed"
+docker compose exec rest_api alembic current
+```
 
-3. Start the React development server:
+Autogenerate compares `libs.db` against the connected database, so a new model
+must be imported in `libs/libs/db/models/__init__.py` or it will be invisible.
 
-   ```bash
-   npm start
-   ```
+A database created before Alembic existed (by the old `create_all` path) is
+detected at startup, stamped with the initial revision, and then upgraded
+normally — no manual step.
 
-   The frontend will be available at `http://localhost:3000`.
+## Tests
 
-TODO
-Fetch user friends
-Friendship delete
-Friend request sender handle on frontend
-Friend request check if already exist
-Friend request event
-DM channel creation on friend request accept
-Guild update delete
-Home dashboard with new icon
-Guild channels
-Guild default channels
+```bash
+python backend/tests/e2e/smoke.py
+```
+
+End to end against a running stack, stdlib only (no host virtualenv needed —
+it shells out to the `docker` CLI). Covers register → friend request → DM →
+guild → invite → member removal, the websocket round trip, multiple sockets per
+user, and realtime delivery of REST mutations. It writes real rows to the dev
+database.
+
+```bash
+docker compose run --rm --no-deps rest_api python -m pytest tests -q
+```
+
+Unit tests for `rest_api`. These do not need a database.
+
+## Deployment
+
+`docker-compose-prod.yml` pulls images from GHCR (the `{GH_USERNAME}` /
+`{GH_REPO_NAME}` placeholders still need filling in) and serves through Caddy on
+80/443 using `Caddyfile.example`.

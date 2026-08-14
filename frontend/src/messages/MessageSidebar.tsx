@@ -1,32 +1,26 @@
-import { useParams } from "react-router-dom";
+import { useMatch } from "react-router-dom";
 import { useChannelStore } from "../shared/channelStore";
 import { useUserStore } from "../shared/userStore";
 import LinkButton from "../shared/LinkButton";
-import AddFriendModal from "../friends/AddFriendModal";
-import { useFriendRequestStore } from "../friends/friendRequestStore";
-import { useEffect } from "react";
-import { useMessageStore } from "../shared/messageStore";
+import { useFriendStore } from "../friends/friendStore";
 import { PiUserCircle } from "react-icons/pi";
 
 export function MessageSidebar() {
   const { getDMChannels, getParticipants } = useChannelStore();
-  const { fetchChannelMessages } = useMessageStore();
-  const { setIsModalOpen } = useFriendRequestStore();
+  const { setIsModalOpen } = useFriendStore();
   const { getUser: getUserFromStore } = useUserStore();
-  const { dmId } = useParams<{ dmId: string }>();
+  // dmId belongs to a child route, so it is read from the URL directly
+  const dmId = useMatch("/dm/:dmId")?.params.dmId;
   const channels = getDMChannels();
-
-  useEffect(() => {
-    if (dmId) {
-      fetchChannelMessages(dmId);
-    }
-  }, [dmId, fetchChannelMessages]);
 
   return (
     <div className="w-1/6 bg-gray-900 text-white flex flex-col items-center px-2 py-4 gap-4">
       <button onClick={() => setIsModalOpen(true)}>Add Friend</button>
-      <AddFriendModal />
-      {channels ? (
+      {channels.length === 0 ? (
+        <p className="text-sm text-gray-400 text-center">
+          No conversations yet
+        </p>
+      ) : (
         channels.map((channel) => (
           <LinkButton
             to={`/dm/${channel.id}`}
@@ -41,8 +35,6 @@ export function MessageSidebar() {
             </div>
           </LinkButton>
         ))
-      ) : (
-        <p>No channels</p>
       )}
     </div>
   );

@@ -21,6 +21,19 @@ class UserMapping:
         self.user_id_to_channel_ids[user_id].add(channel_id)
         self.channel_id_to_user_ids[channel_id].add(user_id)
 
+    def remove_mapping(self, user_id: str, channel_id: str) -> bool:
+        """
+        Remove one user/channel mapping. Returns True when that leaves the
+        channel with no users on this instance.
+        """
+        self.user_id_to_channel_ids.get(user_id, set()).discard(channel_id)
+        users_left = self.channel_id_to_user_ids.get(channel_id, set())
+        users_left.discard(user_id)
+        if not users_left:
+            self.channel_id_to_user_ids.pop(channel_id, None)
+            return True
+        return False
+
     def get_user_channel_ids(self, user_id: str) -> list[str]:
         """
         Get the channel IDs for a user ID.

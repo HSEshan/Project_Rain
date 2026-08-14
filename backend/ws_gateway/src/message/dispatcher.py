@@ -1,10 +1,10 @@
 from typing import List
 
 import structlog
+from libs.db import Message
 from libs.event.schema import Event
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.message.models import Message
 
 logger = structlog.get_logger()
 

@@ -1,5 +1,4 @@
 import { useGuildStore } from "./guildStore";
-import GuildCreateModal from "./GuildCreateModal";
 import LinkButton from "../shared/LinkButton";
 import { PiShield } from "react-icons/pi";
 
@@ -27,7 +26,6 @@ export default function GuildSelectionBar() {
           </div>
         </LinkButton>
       ))}
-      <GuildCreateModal />
     </div>
   );
 }

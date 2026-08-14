@@ -10,7 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy and install shared libs first (caches better)
 COPY ./libs /app/libs
-RUN pip install --no-cache-dir /app/libs
+RUN pip install --no-cache-dir "/app/libs[db]"
 
 # Copy service code and requirements
 COPY ./ws_gateway /app

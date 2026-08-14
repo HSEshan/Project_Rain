@@ -2,7 +2,7 @@ from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.core import get_db
 from src.database.service import BaseService
-from src.user.models import User
+from libs.db import User
 from src.user.repository import UserRepository
 from src.user.schemas import BulkUserRequest, BulkUserResponse, UserResponse
 

@@ -82,32 +82,33 @@ def register(tag):
     return {"id": created["id"], "username": username, "token": token}
 
 
-def run_websocket_probe(sender, receiver, channel_id):
-    """The ws client lives in the gateway container: it has `websockets` and
+def run_probe(script_name: str, ctx: dict, label: str):
+    """Websocket clients live in the gateway container: it has `websockets` and
     sits on the compose network."""
-    probe = pathlib.Path(__file__).with_name("ws_probe.py")
-    ctx = json.dumps(
-        {
-            "sender": sender,
-            "receiver": receiver,
-            "channel_id": channel_id,
-            "text": f"smoke test {uuid.uuid4().hex[:6]}",
-        }
-    )
+    probe = pathlib.Path(__file__).with_name(script_name)
     try:
         result = subprocess.run(
-            ["docker", "compose", "exec", "-T", "ws_gateway", "python", "-", ctx],
+            [
+                "docker",
+                "compose",
+                "exec",
+                "-T",
+                "ws_gateway",
+                "python",
+                "-",
+                json.dumps(ctx),
+            ],
             stdin=probe.open("rb"),
             capture_output=True,
             text=True,
         )
     except FileNotFoundError:
-        print("  SKIP  websocket round trip (docker CLI not found)")
+        print(f"  SKIP  {label} (docker CLI not found)")
         return
 
-    print(result.stdout.rstrip() or "  FAIL  websocket probe produced no output")
+    print(result.stdout.rstrip() or f"  FAIL  {label} produced no output")
     if result.returncode != 0:
-        FAILURES.append(f"websocket round trip failed: {result.stderr[-500:]}")
+        FAILURES.append(f"{label} failed: {result.stderr[-800:]}")
 
 
 print("== auth ==")
@@ -293,7 +294,36 @@ check(
 )
 
 print("== websocket round trip ==")
-run_websocket_probe(alice, bob, dm_channel_id)
+run_probe(
+    "ws_probe.py",
+    {
+        "sender": alice,
+        "receiver": bob,
+        "channel_id": dm_channel_id,
+        "text": f"smoke test {uuid.uuid4().hex[:6]}",
+    },
+    "websocket round trip",
+)
+
+print("== one user, multiple sockets ==")
+run_probe(
+    "multi_socket_probe.py",
+    {
+        "sender": alice,
+        "receiver": bob,
+        "channel_id": dm_channel_id,
+        "text": f"multi socket {uuid.uuid4().hex[:6]}",
+    },
+    "multi socket probe",
+)
+
+print("== realtime events from rest mutations ==")
+# Fresh users: this probe drives its own friend request and guild join
+run_probe(
+    "realtime_probe.py",
+    {"alice": register("rt_alice"), "bob": register("rt_bob")},
+    "realtime probe",
+)
 
 print()
 if FAILURES:

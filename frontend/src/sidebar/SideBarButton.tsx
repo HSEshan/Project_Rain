@@ -16,6 +16,10 @@ export default function SideBarButton({
   onClick,
   active,
 }: SideBarButtonProps) {
+  const className = `w-12 h-12 flex flex-col items-center justify-center rounded-xl cursor-pointer ${
+    active ? "bg-gray-800 text-blue-500" : "bg-gray-700 text-white"
+  }`;
+
   return (
     <Tooltip
       text={toolTipText || ""}
@@ -25,15 +29,17 @@ export default function SideBarButton({
       className="w-12 h-12 flex flex-col items-center justify-center rounded-xl bg-gray-700"
       disabled={!toolTipText}
     >
-      <Link
-        to={to ?? ""}
-        onClick={onClick}
-        className={`w-12 h-12 flex flex-col items-center justify-center rounded-xl bg-gray-700 ${
-          to ? "" : "cursor-pointer"
-        } ${active ? "bg-gray-800 text-blue-500" : "bg-gray-700 text-white"}`}
-      >
-        {children}
-      </Link>
+      {/* Without a destination this is an action (logout), not navigation —
+          rendering a Link to "" would also navigate to the current route. */}
+      {to ? (
+        <Link to={to} onClick={onClick} className={className}>
+          {children}
+        </Link>
+      ) : (
+        <button type="button" onClick={onClick} className={className}>
+          {children}
+        </button>
+      )}
     </Tooltip>
   );
 }

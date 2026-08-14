@@ -3,7 +3,9 @@ import asyncio
 import structlog
 from sqlalchemy import text
 from src.core.config import settings
-from src.database.core import Base, engine
+from src.database.core import engine
+from src.database.migrate import run_migrations
+from src.realtime.publisher import realtime_publisher
 
 logger = structlog.get_logger()
 
@@ -31,12 +33,15 @@ async def startup_event():
     if retries == 0:
         raise Exception("Database connection failed")
 
-    async with engine.begin() as conn:
-        logger.info("Creating Tables...")
-        await conn.run_sync(Base.metadata.create_all)
+    await run_migrations(engine)
+
+    # Best effort: a missing Redis degrades realtime updates, it does not stop
+    # the API from serving
+    await realtime_publisher.connect()
     logger.info("Startup Successful")
 
 
 async def shutdown_event():
+    await realtime_publisher.disconnect()
     await asyncio.sleep(1)
     logger.info("Shutdown Successful")

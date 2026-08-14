@@ -1,13 +1,13 @@
 from datetime import datetime
 
+from libs.db.base import Base, generate_id, generate_timestamp
 from sqlalchemy import UUID, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column
-from src.database.core import Base
-from src.utils.default import generate_id, generate_timestamp
 
 
 class Friendship(Base):
     __tablename__ = "friendships"
+
     user_1_id: Mapped[str] = mapped_column(
         UUID, ForeignKey("users.id"), primary_key=True, index=True
     )
@@ -21,6 +21,7 @@ class Friendship(Base):
 
 class FriendRequest(Base):
     __tablename__ = "friend_requests"
+
     id: Mapped[str] = mapped_column(
         UUID, primary_key=True, index=True, default=generate_id
     )

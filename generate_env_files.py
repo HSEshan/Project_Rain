@@ -24,6 +24,10 @@ BCRYPT_ROUNDS=10
 SUPERUSER_EMAIL=superuser@admin.com
 SUPERUSER_PASSWORD={superuser_password.strip()}
 DOCS=true
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_DB=0
+NUM_SHARDS=16
             """.strip()
         )
     with open("ws_gateway.dev.env", "w") as f:

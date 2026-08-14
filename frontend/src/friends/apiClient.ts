@@ -1,6 +1,7 @@
 import { AxiosError, type AxiosResponse } from "axios";
 import apiClient from "../utils/apiClientBase";
-import type { FriendRequest } from "./friendRequestStore";
+import type { FriendRequest } from "./friendStore";
+import type { User } from "../shared/userStore";
 
 export const getUserFriendRequests = async (): Promise<
   AxiosResponse<FriendRequest[]>
@@ -12,6 +13,16 @@ export const getUserFriendRequests = async (): Promise<
     console.error(error);
     throw new Error("Failed to get user friend requests");
   }
+};
+
+export const getOutgoingFriendRequests = async (): Promise<FriendRequest[]> => {
+  const response = await apiClient.get("/friendship/friends/request/outgoing");
+  return response.data;
+};
+
+export const getFriends = async (): Promise<User[]> => {
+  const response = await apiClient.get("/friendship/friends/me");
+  return response.data;
 };
 
 export const createFriendRequest = async (

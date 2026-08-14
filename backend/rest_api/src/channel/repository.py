@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.channel.models import Channel, ChannelMember, ChannelType
+from libs.db import Channel, ChannelMember, ChannelType
 from src.channel.schemas import DMChannelCreate
 from src.utils.exceptions import NotFoundException
 

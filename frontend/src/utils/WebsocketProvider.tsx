@@ -39,13 +39,14 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   const connect = useCallback(() => {
     if (isConnecting || wsRef.current) return;
 
-    setIsConnecting(true);
-    console.log("Creating new WebSocket connection...");
     const token = getToken();
     if (!token) {
       console.error("No token found");
       return;
     }
+
+    setIsConnecting(true);
+    console.log("Creating new WebSocket connection...");
 
     const protocol = window.location.protocol === "https:" ? "wss" : "ws";
     const host = window.location.host;
@@ -157,7 +158,16 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (wsRef.current) {
-        wsRef.current.close();
+        // Detach first: a socket closed mid-handshake (React's dev-mode double
+        // mount does exactly this) would otherwise report an error and queue a
+        // reconnect for a provider that no longer exists.
+        const socket = wsRef.current;
+        wsRef.current = null;
+        socket.onopen = null;
+        socket.onmessage = null;
+        socket.onerror = null;
+        socket.onclose = null;
+        socket.close();
       }
     };
   }, []); // Only run on mount

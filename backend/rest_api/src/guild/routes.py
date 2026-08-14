@@ -23,6 +23,16 @@ async def get_guild_by_id(
     return await guild_service.get_guild_for_user(user, guild_id)
 
 
+@router.get("/{guild_id}/members", status_code=status.HTTP_200_OK)
+async def get_guild_members(
+    guild_id: str,
+    user: user_dependency,
+    guild_service: GuildService = Depends(get_guild_service),
+):
+    await guild_service.check_guild_member(user.id, guild_id)
+    return await guild_service.get_guild_members(guild_id)
+
+
 @router.post("/", status_code=status.HTTP_201_CREATED)
 async def create_guild(
     guild: GuildCreate,

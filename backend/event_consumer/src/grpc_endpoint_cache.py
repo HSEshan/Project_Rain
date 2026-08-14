@@ -42,8 +42,9 @@ class GrpcEndpointCache:
                 )
                 return endpoints
 
-        # Fetch from Redis
-        if event_type == EventType.NOTIFICATION.value:
+        # Fetch from Redis — receiver_id is a user id for some event types and a
+        # channel id for others (libs.event.schema owns that distinction)
+        if EventType.is_user_addressed(event_type):
             endpoints = await self.redis_manager.get_grpc_endpoint_for_user(receiver_id)
         else:
             endpoints = await self.redis_manager.get_grpc_endpoints_for_channel(

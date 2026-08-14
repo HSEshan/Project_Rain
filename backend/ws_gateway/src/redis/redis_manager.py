@@ -1,9 +1,8 @@
 import asyncio
-import hashlib
 from typing import List, Optional
 
 import structlog
-from libs.event.codec import EventCodec
+from libs.event.publisher import EventPublisher
 from libs.event.schema import Event
 from libs.rediskeys import RediKeys
 from redis.asyncio import Redis
@@ -17,6 +16,7 @@ logger = structlog.get_logger()
 class RedisManager:
     def __init__(self):
         self.redis: Redis | None = None
+        self.publisher: EventPublisher | None = None
 
     async def connect(self, host: str, port: int, db: int):
         retries = 5
@@ -24,6 +24,7 @@ class RedisManager:
             try:
                 self.redis = Redis(host=host, port=port, db=db)
                 await self.redis.ping()
+                self.publisher = EventPublisher(self.redis, settings.NUM_SHARDS)
                 logger.info("Connected to Redis")
                 break
             except Exception as e:
@@ -111,26 +112,11 @@ class RedisManager:
         key = RediKeys.user_channels(user_id)
         await self.redis.delete(key)
 
-    async def push_event_to_stream(self, shard_id: str, event: Event):
-        key = RediKeys.stream_shard(shard_id)
-        data = EventCodec.to_redis(event)
-        await self.redis.xadd(key, data)
+    async def push_event_to_stream(self, event: Event):
+        await self.publisher.publish(event)
 
     async def batch_push_events_to_streams(self, batch: List[Event]):
-        pipe = self.redis.pipeline()
-        for event in batch:
-            shard_id = self._compute_shard_id(event.receiver_id)
-            key = RediKeys.stream_shard(shard_id)
-            event_data = EventCodec.to_redis(event)
-            pipe.xadd(key, event_data)
-
-        await pipe.execute()
-
-    def _compute_shard_id(
-        self, receiver_id: str, num_shards: int = settings.NUM_SHARDS
-    ) -> str:
-        hash_val = int(hashlib.sha256(str(receiver_id).encode()).hexdigest(), 16)
-        return str(hash_val % num_shards)
+        await self.publisher.publish_many(batch)
 
     async def query_user_channels_from_db(self, user_id: str) -> List[str]:
         async with AsyncSessionLocal() as session:

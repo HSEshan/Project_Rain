@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Install libs first (better caching)
 COPY ./libs /app/libs
-RUN pip install --no-cache-dir /app/libs
+RUN pip install --no-cache-dir "/app/libs[db]"
 
 # Copy service code and requirements
 COPY ./rest_api /app

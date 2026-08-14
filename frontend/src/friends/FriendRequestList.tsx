@@ -1,11 +1,11 @@
-import { useFriendRequestStore } from "./friendRequestStore";
+import { useFriendStore } from "./friendStore";
 import { useUserStore } from "../shared/userStore";
 import { useChannelStore } from "../shared/channelStore";
 import { useState } from "react";
 import { acceptFriendRequest, rejectFriendRequest } from "./apiClient";
 
 export default function FriendRequestList() {
-  const { friendRequests, removeFriendRequest } = useFriendRequestStore();
+  const { friendRequests, removeFriendRequest, fetchFriends } = useFriendStore();
   const { getUser: getUserFromStore, fetchUsers } = useUserStore();
   const { fetchUserChannels, setParticipants } = useChannelStore();
   const [response, setResponse] = useState<string>("");
@@ -29,6 +29,7 @@ export default function FriendRequestList() {
       await fetchUserChannels();
       setParticipants(dm_channel_id, [friend_id]);
       await fetchUsers([friend_id]);
+      await fetchFriends();
     } catch (error) {
       console.error(error);
       setResponse("Could not accept that friend request");

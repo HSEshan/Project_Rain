@@ -1,7 +1,7 @@
 from typing import Optional
 
 from pydantic import BaseModel
-from src.channel.models import ChannelType
+from libs.db import ChannelType
 
 
 class DMChannelCreate(BaseModel):

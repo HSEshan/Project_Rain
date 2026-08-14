@@ -1,12 +1,10 @@
 import { type Message } from "../shared/types";
 import { useWebSocket } from "../utils/WebsocketProvider";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
 import { useMessageStore } from "../shared/messageStore";
 import { EventType } from "../utils/eventType";
 import { useAuth } from "../auth/AuthContext";
 import { useUserStore } from "../shared/userStore";
-import { useChannelStore } from "../shared/channelStore";
 
 function MessageItem({ message }: { message: Message }) {
   const { getCurrentUser } = useAuth();
@@ -38,14 +36,22 @@ function MessageItem({ message }: { message: Message }) {
   );
 }
 
-export function MessageView() {
-  const { getChannelMessages } = useMessageStore();
-  const { getParticipants } = useChannelStore();
-  const { getUser: getUserFromStore } = useUserStore();
-  const { dmId } = useParams<{ dmId: string }>();
+export interface MessageViewProps {
+  channelId: string;
+  /** Rendered as the header: DM participants, or "# channel-name" in a guild. */
+  title: string;
+}
+
+/**
+ * Chat surface for one channel. Channel-agnostic on purpose — DMs and guild
+ * text channels are the same thing to the message store and the WS protocol.
+ */
+export function MessageView({ channelId, title }: MessageViewProps) {
+  const { getChannelMessages, fetchChannelMessages } = useMessageStore();
+  const { fetchUsers } = useUserStore();
   const { getWs } = useWebSocket();
 
-  const messages = getChannelMessages(dmId ?? "");
+  const messages = getChannelMessages(channelId);
   const ws = getWs();
   const messageRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
@@ -59,22 +65,31 @@ export function MessageView() {
       });
     }
   };
-  useEffect(() => {
-    if (dmId) {
-      setIsInitialLoad(true);
-    }
-  }, [dmId]);
 
   useEffect(() => {
-    if (!messages || messages.length === 0) return;
+    if (!channelId) return;
+    setIsInitialLoad(true);
+    fetchChannelMessages(channelId);
+  }, [channelId, fetchChannelMessages]);
+
+  // Guild channels can carry messages from members we have never loaded.
+  // Keyed on length, not the array: the store returns a fresh array each render.
+  useEffect(() => {
+    const senderIds = [...new Set(messages.map((m) => m.sender_id))];
+    if (senderIds.length > 0) fetchUsers(senderIds);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messages.length, fetchUsers]);
+
+  useEffect(() => {
+    if (messages.length === 0) return;
     if (isInitialLoad) {
       setIsInitialLoad(false);
       scrollToBottom(false);
     } else {
       scrollToBottom(true);
     }
-    console.log(messages);
-  }, [messages]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channelId, messages.length]);
 
   const sendMessage = () => {
     if (!ws) {
@@ -86,7 +101,7 @@ export function MessageView() {
       ws.send(
         JSON.stringify({
           event_type: EventType.MESSAGE,
-          receiver_id: dmId,
+          receiver_id: channelId,
           text: messageRef.current.value,
         })
       );
@@ -107,62 +122,42 @@ export function MessageView() {
     }
   };
 
-  const getParticipantNames = () => {
-    if (!dmId) return "Loading...";
-
-    const participantIds = getParticipants(dmId);
-    const names = participantIds
-      .map((participantId) => {
-        const user = getUserFromStore(participantId);
-        return user?.username || "Loading...";
-      })
-      .join(", ");
-
-    return names || "Loading...";
-  };
-
   return (
-    <div className="w-3/5 bg-gray-800 p-4 flex flex-col h-full">
+    <div className="flex-1 bg-gray-800 p-4 flex flex-col h-full">
       <h1 className="text-lg text-white font-bold mb-4 flex-shrink-0">
-        {getParticipantNames()}
+        {title}
       </h1>
 
-      {messages === undefined ? (
-        <div className="text-gray-500 text-center py-8">Loading...</div>
-      ) : (
-        <>
-          <div
-            className="flex-1 overflow-y-auto mb-5 flex flex-col space-y-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800"
-            ref={messagesContainerRef}
-          >
-            {messages.length === 0 ? (
-              <div className="text-gray-500 text-center py-8">
-                No messages yet. Start the conversation!
-              </div>
-            ) : (
-              messages.map((message: Message) => (
-                <MessageItem key={message.id} message={message} />
-              ))
-            )}
+      <div
+        className="flex-1 overflow-y-auto mb-5 flex flex-col space-y-2 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-gray-800"
+        ref={messagesContainerRef}
+      >
+        {messages.length === 0 ? (
+          <div className="text-gray-500 text-center py-8">
+            No messages yet. Start the conversation!
           </div>
+        ) : (
+          messages.map((message: Message) => (
+            <MessageItem key={message.id} message={message} />
+          ))
+        )}
+      </div>
 
-          <div className="flex gap-2 relative bottom-0 left-0 right-0 p-4 bg-gray-800 border-t">
-            <textarea
-              className="flex-1 p-3 rounded-lg bg-gray-600 text-white shadow-sm border border-none focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
-              ref={messageRef}
-              rows={1}
-              placeholder="Type your message here..."
-              onKeyDown={handleKeyPress}
-            />
-            <button
-              className="bg-black text-white px-6 py-3 rounded-lg shadow-sm transition-colors duration-200 focus:outline-none"
-              onClick={sendMessage}
-            >
-              Send
-            </button>
-          </div>
-        </>
-      )}
+      <div className="flex gap-2 relative bottom-0 left-0 right-0 p-4 bg-gray-800 border-t">
+        <textarea
+          className="flex-1 p-3 rounded-lg bg-gray-600 text-white shadow-sm border border-none focus:outline-none focus:ring-2 focus:ring-white focus:border-transparent"
+          ref={messageRef}
+          rows={1}
+          placeholder="Type your message here..."
+          onKeyDown={handleKeyPress}
+        />
+        <button
+          className="bg-black text-white px-6 py-3 rounded-lg shadow-sm transition-colors duration-200 focus:outline-none"
+          onClick={sendMessage}
+        >
+          Send
+        </button>
+      </div>
     </div>
   );
 }

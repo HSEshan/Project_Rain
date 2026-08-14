@@ -27,4 +27,4 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 logger.error(f"Error processing event: {e}")
 
     except WebSocketDisconnect:
-        await websocket_manager.remove_client(current_user.id)
+        await websocket_manager.remove_client(current_user.id, websocket)

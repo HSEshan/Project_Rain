@@ -56,6 +56,9 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      # rest_api runs the Alembic migrations; the gateway assumes the tables exist
+      rest_api:
+        condition: service_healthy
     env_file:
       - ./ws_gateway.dev.env
     volumes:

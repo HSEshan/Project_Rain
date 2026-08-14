@@ -1,6 +1,6 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.user.models import User
+from libs.db import User
 from src.utils.exceptions import NotFoundException
 
 

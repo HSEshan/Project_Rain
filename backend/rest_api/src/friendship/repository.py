@@ -1,8 +1,8 @@
 from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.friendship.models import FriendRequest, Friendship
+from libs.db import FriendRequest, Friendship
 from src.friendship.schemas import FriendRequestCreate
-from src.user.models import User
+from libs.db import User
 from src.user.repository import UserRepository
 from src.utils.exceptions import AlreadyExistsException, NotFoundException
 
@@ -57,6 +57,15 @@ class FriendshipRepository:
     ) -> list[FriendRequest]:
         request = await db.execute(
             select(FriendRequest).where(FriendRequest.to_user_id == user_id)
+        )
+        return request.scalars().all()
+
+    @staticmethod
+    async def get_outgoing_friend_requests(
+        db: AsyncSession, user_id: str
+    ) -> list[FriendRequest]:
+        request = await db.execute(
+            select(FriendRequest).where(FriendRequest.from_user_id == user_id)
         )
         return request.scalars().all()
 

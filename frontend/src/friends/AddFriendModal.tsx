@@ -1,12 +1,12 @@
 import { useRef, useState } from "react";
 import Modal from "../shared/Modal";
-import { useFriendRequestStore } from "./friendRequestStore";
+import { useFriendStore } from "./friendStore";
 import FriendRequestList from "./FriendRequestList";
 import { createFriendRequest } from "./apiClient";
 
 export default function AddFriendModal() {
   const usernameRef = useRef<HTMLInputElement>(null);
-  const { isModalOpen, setIsModalOpen } = useFriendRequestStore();
+  const { isModalOpen, setIsModalOpen } = useFriendStore();
   const [response, setResponse] = useState<string>("");
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

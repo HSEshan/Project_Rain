@@ -35,11 +35,19 @@ services:
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -53,11 +61,22 @@ services:
       - LOG_LEVEL=INFO
       - LOG_FORMAT=json
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      # rest_api runs the Alembic migrations; the gateway assumes tables exist
+      rest_api:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -72,8 +91,8 @@ services:
       - LOG_FORMAT=json
     restart: unless-stopped
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
 
   lease_manager:
     image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/lease_manager:prod
@@ -83,8 +102,8 @@ services:
       - LOG_FORMAT=json
     restart: unless-stopped
     depends_on:
-      - redis
-      - postgres
+      redis:
+        condition: service_healthy
 
   frontend:
     image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/frontend:prod

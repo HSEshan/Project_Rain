@@ -102,7 +102,8 @@ class StreamWorker:
     async def _transmit_batch(self, endpoint: str, batch: ProtobufEventBatch):
         stub = await self.connection_pool.get_stub(endpoint)
         try:
-            await stub.SendEvents(batch)
+            # Without a deadline a dead gateway blocks this worker's shard
+            await stub.SendEvents(batch, timeout=config.grpc_timeout)
         except Exception as e:
             logger.error("Failed to send events to gRPC endpoint", error=e)
             raise e

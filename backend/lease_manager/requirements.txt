@@ -1,4 +1,6 @@
+# Shared pins (structlog, pydantic) come from backend/libs. This service
+# deliberately has no Postgres dependency — libs is installed without the `db`
+# extra.
 redis==6.2.0
-structlog==25.4.0
 typing-inspection==0.4.1
 typing_extensions==4.14.1

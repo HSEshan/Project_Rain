@@ -1,38 +1,17 @@
 from typing import Annotated, Any, AsyncGenerator
 
 from fastapi import Depends
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
+from libs.db import Base, create_engine, create_session_factory  # noqa: F401
+from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import settings
 
-# Create async engine
-engine = create_async_engine(
-    settings.ASYNC_DB_URL,
-    echo=False,
-    pool_size=2,
-    max_overflow=15,
-    pool_timeout=30,
-    pool_recycle=1800,
-    pool_pre_ping=True,
-)
-
-# Create async session maker
-AsyncSessionLocal: AsyncSession = sessionmaker(
-    bind=engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
-    autocommit=False,
-    autoflush=False,
-)
-
-# Define Base class for ORM models
-Base = declarative_base()
+engine = create_engine(settings.ASYNC_DB_URL)
+AsyncSessionLocal = create_session_factory(engine)
 
 
 # Dependency to get the database session
 async def get_db() -> AsyncGenerator[Any, None]:
-    async_session = AsyncSessionLocal
-    async with async_session() as db:
+    async with AsyncSessionLocal() as db:
         yield db
 
 

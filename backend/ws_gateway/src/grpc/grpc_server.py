@@ -11,9 +11,10 @@ logger = structlog.get_logger()
 @bind_event_context(event_arg_name="request")
 class EventService(event_pb2_grpc.EventServiceServicer):
     async def SendEvent(self, request, context):
-        event = request.event
-        logger.debug(f"Received event: {event}")
-        await event_dispatcher.send_events_to_clients([EventCodec.to_pydantic(event)])
+        # `rpc SendEvent(Event)` — the request *is* the event. Reading
+        # `request.event` raised on every call, which is why nothing used it.
+        logger.debug(f"Received event: {request}")
+        await event_dispatcher.send_events_to_clients([EventCodec.to_pydantic(request)])
         return event_pb2.Ack(success=True, message="Delivered")
 
     async def SendEvents(self, request, context):

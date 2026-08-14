@@ -4,19 +4,22 @@ from datetime import datetime, timezone
 from fastapi import Depends
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.auth.utils import CurrentUser
-from src.channel.models import Channel, ChannelMember
-from src.database.core import get_db
-from src.database.service import BaseService
-from src.guild.models import (
+from libs.db import (
+    Channel,
+    ChannelMember,
     Guild,
     GuildInvite,
     GuildMember,
     GuildMemberRole,
     GuildMemberStatus,
 )
+from src.auth.utils import CurrentUser
+from src.database.core import get_db
+from src.database.service import BaseService
 from src.guild.repository import GuildRepository
 from src.guild.schemas import GuildCreate
+from src.realtime import events
+from src.realtime.publisher import realtime_publisher
 from src.utils.exceptions import (
     AlreadyExistsException,
     ForbiddenException,
@@ -63,7 +66,7 @@ class GuildService(BaseService):
         self, user: CurrentUser, user_to_invite: str, guild_id: str
     ) -> GuildInvite:
         async with self.db.begin():
-            await self.get_guild_by_id(guild_id)
+            guild = await self.get_guild_by_id(guild_id)
             await self.check_guild_member(user.id, guild_id)
 
             existing_member = await self.db.execute(
@@ -92,6 +95,17 @@ class GuildService(BaseService):
             self.db.add(invite)
             await self.db.flush()
             await self.db.refresh(invite)
+            guild_name = guild.name
+
+        await realtime_publisher.publish(
+            events.guild_invite_received(
+                invite_id=invite.invite_id,
+                guild_id=guild_id,
+                guild_name=guild_name,
+                from_user_id=user.id,
+                to_user_id=user_to_invite,
+            )
+        )
         return invite
 
     async def accept_guild_invite(
@@ -144,8 +158,20 @@ class GuildService(BaseService):
             )
             await self.db.flush()
 
+            guild_id = str(result.guild_id)
             # The invite is single use
             await self.db.delete(result)
+
+        # The joiner is now a member of every channel in the guild
+        await realtime_publisher.invalidate_user_channels(user.id)
+        await realtime_publisher.publish(
+            events.channels_changed(
+                actor_id=user.id,
+                to_user_id=user.id,
+                text="You joined a guild",
+                guild_id=guild_id,
+            )
+        )
         return guild_member
 
     async def remove_guild_member(
@@ -181,6 +207,16 @@ class GuildService(BaseService):
             )
             await self.db.delete(result)
             await self.db.flush()
+
+        await realtime_publisher.invalidate_user_channels(member_id)
+        await realtime_publisher.publish(
+            events.channels_changed(
+                actor_id=user.id,
+                to_user_id=member_id,
+                text="You were removed from a guild",
+                guild_id=guild_id,
+            )
+        )
         return True
 
     async def get_guild_members(self, guild_id: str) -> list[GuildMember]:

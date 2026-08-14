@@ -2,12 +2,11 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
+from libs.db.base import Base, generate_id, generate_timestamp
 from sqlalchemy import UUID, DateTime
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy import ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
-from src.database.core import Base
-from src.utils.default import generate_id, generate_timestamp
 
 
 class ChannelType(Enum):

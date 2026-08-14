@@ -1,6 +1,5 @@
 from fastapi import APIRouter, Depends, status
 from src.auth.utils import user_dependency
-from src.friendship.schemas import FriendRequestCreate
 from src.friendship.service import FriendshipService, get_friendship_service
 
 router = APIRouter(prefix="/friendship", tags=["friendship"])
@@ -22,15 +21,21 @@ async def get_user_friend_requests(
     return await friendship_service.get_friend_requests_by_user_id(user.id)
 
 
+@router.get("/friends/request/outgoing", status_code=status.HTTP_200_OK)
+async def get_outgoing_friend_requests(
+    user: user_dependency,
+    friendship_service: FriendshipService = Depends(get_friendship_service),
+):
+    return await friendship_service.get_outgoing_friend_requests(user.id)
+
+
 @router.post("/friends/request", status_code=status.HTTP_201_CREATED)
 async def create_friend_request(
     current_user: user_dependency,
     to_username: str,
     friendship_service: FriendshipService = Depends(get_friendship_service),
 ):
-    return await friendship_service.create_friend_request(
-        FriendRequestCreate(from_user_id=current_user.id, to_username=to_username)
-    )
+    return await friendship_service.create_friend_request(current_user, to_username)
 
 
 @router.post(
@@ -42,7 +47,7 @@ async def accept_friend_request(
     friendship_service: FriendshipService = Depends(get_friendship_service),
 ):
     return await friendship_service.accept_friend_request(
-        current_user.id, friend_request_id
+        current_user, friend_request_id
     )
 
 

@@ -1,7 +1,9 @@
 import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import { MessageLayout } from "./messages/MessageLayout";
-import { MessageView } from "./messages/MessageView";
+import { DMView } from "./messages/DMView";
 import { GuildLayout } from "./guild/GuildLayout";
+import GuildsHome from "./guild/GuildsHome";
+import GuildChannelView from "./guild/GuildChannelView";
 
 import AuthPage from "./auth/AuthPage";
 import RequireAuth from "./auth/RequireAuth";
@@ -11,6 +13,11 @@ import { Sidebar } from "./sidebar/Sidebar";
 import AppInitializer from "./utils/AppInitializer";
 import LandingPage from "./landing_page/LandingPage";
 import HomePage from "./home/HomePage";
+import EmptyState from "./shared/EmptyState";
+import FriendsPage from "./friends/FriendsPage";
+import AddFriendModal from "./friends/AddFriendModal";
+import GuildCreateModal from "./guild/GuildCreateModal";
+import GuildChannelCreateModal from "./guild/GuildChannelCreateModal";
 
 function MainLayout() {
   return (
@@ -20,10 +27,17 @@ function MainLayout() {
         <Sidebar />
 
         <Outlet />
+
+        {/* Single mount point: every modal is driven by store state, so any
+            component can open one without mounting its own copy. */}
+        <AddFriendModal />
+        <GuildCreateModal />
+        <GuildChannelCreateModal />
       </WebSocketProvider>
     </div>
   );
 }
+
 export default function App() {
   return (
     <AuthProvider>
@@ -37,16 +51,28 @@ export default function App() {
               <Route index element={<HomePage />} />
             </Route>
             <Route path="/dm" element={<MainLayout />}>
-              <Route index element={<MessageLayout />} />
-              <Route path=":dmId" element={<MessageLayout />}>
-                <Route index element={<MessageView />} />
+              <Route element={<MessageLayout />}>
+                <Route index element={<FriendsPage />} />
+                <Route path=":dmId" element={<DMView />} />
               </Route>
             </Route>
             <Route path="/guild" element={<MainLayout />}>
-              <Route index element={<GuildLayout />} />
+              <Route index element={<GuildsHome />} />
+              {/* The layout sits on :guildId so useParams sees the guild */}
               <Route path=":guildId" element={<GuildLayout />}>
-                {/* <Route index element={<GuildView />} />
-                <Route path="channel/:channelId" element={<GuildView />} /> */}
+                <Route
+                  index
+                  element={
+                    <EmptyState
+                      title="No channel selected"
+                      hint="Pick a channel on the left to start talking."
+                    />
+                  }
+                />
+                <Route
+                  path="channel/:channelId"
+                  element={<GuildChannelView />}
+                />
               </Route>
             </Route>
           </Route>

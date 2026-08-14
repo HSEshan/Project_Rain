@@ -1,10 +1,10 @@
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.utils import CurrentUser
-from src.channel.models import Channel, ChannelType
+from libs.db import Channel, ChannelType
 from src.channel.repository import ChannelRepository
 from src.channel.schemas import GuildChannelCreate
-from src.guild.models import Guild, GuildMember, GuildMemberRole, GuildMemberStatus
+from libs.db import Guild, GuildMember, GuildMemberRole, GuildMemberStatus
 from src.guild.schemas import GuildCreate
 
 

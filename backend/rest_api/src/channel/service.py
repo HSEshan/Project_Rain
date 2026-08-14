@@ -2,12 +2,14 @@ from fastapi import Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.utils import CurrentUser
-from src.channel.models import Channel, ChannelMember
+from libs.db import Channel, ChannelMember
 from src.channel.repository import ChannelRepository
 from src.channel.schemas import DMChannelCreate, GuildChannelCreate
 from src.database.core import get_db
 from src.database.service import BaseService
-from src.guild.models import GuildMember, GuildMemberRole
+from libs.db import GuildMember, GuildMemberRole
+from src.realtime import events
+from src.realtime.publisher import realtime_publisher
 from src.utils.exceptions import ForbiddenException, NotFoundException
 
 
@@ -56,13 +58,28 @@ class ChannelService(BaseService):
             guild_member_ids = await self.db.execute(
                 select(GuildMember.user_id).where(GuildMember.guild_id == guild_id)
             )
+            member_ids = [str(member_id) for member_id in guild_member_ids.scalars()]
             self.db.add_all(
                 [
                     ChannelMember(channel_id=new_channel.id, user_id=member_id)
-                    for member_id in guild_member_ids.scalars().all()
+                    for member_id in member_ids
                 ]
             )
             await self.db.flush()
+            channel_id = str(new_channel.id)
+
+        # Every member's channel list just changed
+        await realtime_publisher.invalidate_user_channels(*member_ids)
+        await realtime_publisher.publish_many(
+            events.channels_changed(
+                actor_id=user.id,
+                to_user_id=member_id,
+                text=f"New channel: {new_channel.name}",
+                guild_id=guild_id,
+                channel_id=channel_id,
+            )
+            for member_id in member_ids
+        )
         return new_channel
 
     async def get_channel_by_id(self, user: CurrentUser, channel_id: str) -> Channel:

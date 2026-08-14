@@ -5,7 +5,7 @@ from src.auth.utils import CurrentUser
 from src.channel.repository import ChannelRepository
 from src.database.core import get_db
 from src.database.service import BaseService
-from src.message.models import Message
+from libs.db import Message
 
 
 class MessageService(BaseService):

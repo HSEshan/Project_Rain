@@ -6,7 +6,7 @@ from src.auth.schemas import Token, UserCreate, UserResponse
 from src.auth.utils import create_access_token, parse_login_method
 from src.database.core import get_db
 from src.database.service import BaseService
-from src.user.models import User
+from libs.db import User
 from src.utils.exceptions import (
     AlreadyExistsException,
     NotFoundException,
