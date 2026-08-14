@@ -28,6 +28,43 @@ export const postCreateGuildChannel = async (
   return await apiClient.post(`/channels/guild/${guildId}`, channel);
 };
 
+export type GuildInvite = {
+  invite_id: string;
+  guild_id: string;
+  guild_name: string;
+  /** Null for invites predating the column, or if that account is gone. */
+  inviter_id: string | null;
+  inviter_username: string | null;
+  expires_at: string;
+};
+
+/** Invite by username (what a person types) or by id (a friend you picked). */
+export const postGuildInvite = async (
+  guildId: string,
+  target: { username: string } | { user_id: string }
+): Promise<AxiosResponse> => {
+  return await apiClient.post(`/guilds/${guildId}/invite`, target);
+};
+
+export const getMyGuildInvites = async (): Promise<GuildInvite[]> => {
+  const response = await apiClient.get("/guilds/invites/me");
+  return response.data;
+};
+
+export const postAcceptGuildInvite = async (
+  guildId: string,
+  inviteId: string
+): Promise<AxiosResponse> => {
+  return await apiClient.post(`/guilds/${guildId}/invites/${inviteId}/accept`);
+};
+
+export const deleteGuildInvite = async (
+  guildId: string,
+  inviteId: string
+): Promise<AxiosResponse> => {
+  return await apiClient.delete(`/guilds/${guildId}/invites/${inviteId}`);
+};
+
 export type GuildCreate = {
   name: string;
   description: string;

@@ -1,3 +1,7 @@
+# Production stack. Deployed onto a VPS that already runs host Nginx for
+# another app, so this file assumes that shape: images are built here rather
+# than pulled, and the Caddy edge sits on 127.0.0.1:8081 with Nginx terminating
+# TLS in front of it. See DEPLOY.md.
 name: project-rain
 
 services:
@@ -20,14 +24,24 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
+      # `$$` so Compose passes the variable through and the container's shell
+      # expands it. A single `$` would interpolate on the host, where these are
+      # unset — env_file values are not available for Compose substitution —
+      # and `pg_isready -U "" -d ""` never goes healthy, so nothing that
+      # depends on postgres would ever start.
       test:
-        ["CMD", "pg_isready", "-U", "${POSTGRES_USER}", "-d", "${POSTGRES_DB}"]
+        ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   rest_api:
-    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/rest_api:prod
+    build:
+      context: ./backend
+      dockerfile: rest_api/Dockerfile
+    # The Dockerfile CMD ends in --reload, which in dev watches a bind mount
+    # that does not exist here.
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file:
       - ./rest_api.env
     environment:
@@ -53,7 +67,10 @@ services:
       retries: 5
 
   ws_gateway:
-    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/ws_gateway:prod
+    build:
+      context: ./backend
+      dockerfile: ws_gateway/Dockerfile
+    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file:
       - ./ws_gateway.env
     environment:
@@ -82,7 +99,9 @@ services:
       retries: 5
 
   event_consumer:
-    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/event_consumer:prod
+    build:
+      context: ./backend
+      dockerfile: event_consumer/Dockerfile
     env_file:
       - ./event_consumer.env
     environment:
@@ -95,7 +114,13 @@ services:
         condition: service_healthy
 
   lease_manager:
-    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/lease_manager:prod
+    build:
+      context: ./backend
+      dockerfile: lease_manager/Dockerfile
+    # Its Config reads REDIS_* and NUM_STREAMS with no defaults and raises on
+    # a missing one, so this file is required, not optional.
+    env_file:
+      - ./lease_manager.env
     environment:
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
@@ -105,11 +130,38 @@ services:
       redis:
         condition: service_healthy
 
+  # Voice SFU. Signalling is proxied by Caddy at /livekit; media is WebRTC over
+  # UDP straight to 7882, which must be open on the host firewall AND on the
+  # provider's security group — no proxy can carry it, and voice fails as
+  # "connects, then nobody can hear anyone" if it is closed. livekit.yaml must
+  # set `use_external_ip: true` instead of the dev config's loopback node_ip,
+  # so ICE advertises a reachable address.
+  livekit:
+    image: livekit/livekit-server:v1.10
+    command: --config /etc/livekit.yaml
+    env_file:
+      - ./livekit.env
+    volumes:
+      - ./livekit.yaml:/etc/livekit.yaml:ro
+    restart: unless-stopped
+    ports:
+      - "7881:7881"
+      - "7882:7882/udp"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7880/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   frontend:
-    image: ghcr.io/{GH_USERNAME}/{GH_REPO_NAME}/frontend:prod
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
     restart: unless-stopped
 
-  # edge caddy: PUBLIC ENTRYPOINT (TLS + reverse proxy)
+  # Edge caddy: routes /api, /ws, /livekit and the SPA. It is NOT the public
+  # entrypoint — host Nginx terminates TLS and proxies here, so this binds to
+  # loopback and speaks plain HTTP. Use Caddyfile.example.
   edge:
     image: caddy:2.8
     restart: unless-stopped
@@ -117,9 +169,9 @@ services:
       - rest_api
       - ws_gateway
       - frontend
+      - livekit
     ports:
-      - "80:80"
-      - "443:443"
+      - "127.0.0.1:8081:8081"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

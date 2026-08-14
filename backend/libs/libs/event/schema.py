@@ -19,6 +19,11 @@ class EventType(str, Enum):
     CALL = "call"
     NOTIFICATION = "notification"
     FRIEND_REQUEST = "friend_request"
+    # Someone joined or left a voice channel. Channel-addressed: `receiver_id`
+    # is the voice channel, so it fans out to its members exactly like a
+    # message. The audio itself never touches this pipeline — that is the SFU's
+    # job (see AGENTS.md, "Voice / SFU").
+    VOICE_STATE = "voice_state"
 
     @classmethod
     def is_user_addressed(cls, event_type: "EventType | str") -> bool:
@@ -46,8 +51,13 @@ class EventAction(str, Enum):
     FRIEND_REQUEST_RECEIVED = "friend_request_received"
     FRIEND_REQUEST_ACCEPTED = "friend_request_accepted"
     GUILD_INVITE_RECEIVED = "guild_invite_received"
+    # An invite this user was holding is gone — declined here or in another tab.
+    # Not a membership change, so it does not carry CHANNELS_CHANGED_FLAG.
+    GUILD_INVITE_REMOVED = "guild_invite_removed"
     # Nothing to show the user beyond "your channels changed"
     CHANNELS_CHANGED = "channels_changed"
+    VOICE_JOINED = "voice_joined"
+    VOICE_LEFT = "voice_left"
 
 
 # Metadata flag, set alongside any action that changed the recipient's channel

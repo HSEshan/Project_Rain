@@ -34,6 +34,17 @@ class SettingsFactory(BaseSettings):
     REDIS_DB: int = 0
     NUM_SHARDS: int = 16
 
+    # Voice (LiveKit SFU). The key/secret pair must match the one the livekit
+    # container is started with — rest_api mints the join tokens. Defaulted so
+    # that an env file written before voice existed still boots; the voice
+    # endpoints return 503 while the secret is empty rather than minting
+    # tokens nothing will accept.
+    LIVEKIT_API_KEY: str = "devkey"
+    LIVEKIT_API_SECRET: str = ""
+    # Path the browser reaches LiveKit on, same origin as the app (Caddy
+    # proxies it). Not a full URL: rest_api does not know the public host.
+    LIVEKIT_PUBLIC_PATH: str = "/livekit"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

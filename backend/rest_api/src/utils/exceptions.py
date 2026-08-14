@@ -27,3 +27,10 @@ class ForbiddenException(HTTPException):
 
     def __init__(self, detail: str = "Access forbidden"):
         super().__init__(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+
+
+class ServiceUnavailableException(HTTPException):
+    """A dependency this endpoint needs is not configured or not reachable."""
+
+    def __init__(self, detail: str = "Service unavailable"):
+        super().__init__(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)

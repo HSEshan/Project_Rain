@@ -1,0 +1,48 @@
+# LiveKit SFU — development config.
+#
+# API keys are NOT here. They come from the `LIVEKIT_KEYS` env var in
+# livekit.dev.env (gitignored, written by generate_env_files.py) so that the
+# same secret can be handed to rest_api, which mints the join tokens.
+#
+# Ports:
+#   7880/tcp  signalling + HTTP. Reached through Caddy at /livekit, so the
+#             browser talks to it same-origin like /api and /ws.
+#   7881/tcp  WebRTC over TCP, the fallback when UDP is blocked.
+#   7882/udp  WebRTC media. Single muxed port on purpose: publishing a range of
+#             a hundred UDP ports through Docker Desktop is painfully slow.
+#
+# Media never goes through Caddy — it is UDP straight to the published port.
+
+port: 7880
+
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  # In dev the browser runs on the Docker host, so the address LiveKit
+  # advertises in its ICE candidates has to be the host's loopback, not the
+  # container IP (which nothing outside the compose network can reach).
+  # In production set use_external_ip: true instead and drop node_ip.
+  use_external_ip: false
+  node_ip: 127.0.0.1
+
+# Presence. rest_api's roster is driven entirely by these, because a browser
+# that refreshes or is killed never sends a "leave" of its own and LiveKit is
+# the only thing that reliably notices. `api_key` must name a key in
+# LIVEKIT_KEYS; the callback is signed with its secret.
+webhook:
+  api_key: devkey
+  urls:
+    - http://rest_api:8000/voice/webhook
+
+room:
+  # Rooms are created on first join. The gatekeeper is rest_api: a token is
+  # only minted for a ChannelMember of a GUILD_VOICE channel, and the room name
+  # is that channel's id, so there is nothing to pre-create.
+  auto_create: true
+  # Tear the room down 5 minutes after the last participant leaves
+  empty_timeout: 300
+  max_participants: 30
+
+logging:
+  level: info
+  json: false

@@ -1,33 +1,48 @@
-yourdomain.com {
+# Production edge. Copy to `Caddyfile` (gitignored) for docker-compose-prod.yml.
+# `Caddyfile.dev.example` is the development one and listens on :8080.
+#
+# This is NOT the public entrypoint. The VPS runs host Nginx, which owns 80/443
+# and terminates TLS; it proxies everything to this listener on
+# 127.0.0.1:8081. Caddy's job is routing — one place that knows /api, /ws,
+# /livekit and the SPA, shared in shape with the dev config, so the Nginx vhost
+# stays a single proxy_pass that never needs updating when a route changes.
+#
+# Plain HTTP is deliberate: this port is bound to loopback and only Nginx talks
+# to it. A port-only site address also stops Caddy trying to provision a
+# certificate it cannot get with 443 already taken.
+
+# `trusted_proxies` must live in the global block, not the site block. Nginx is
+# the only client, so read the real client IP from its X-Forwarded-For rather
+# than logging the proxy's own address.
+{
+    servers {
+        trusted_proxies static private_ranges
+    }
+}
+
+:8081 {
     encode gzip
 
     # --- API (HTTP) ---
     handle_path /api/* {
-        reverse_proxy rest_api:8000 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
+        reverse_proxy rest_api:8000
     }
 
     # --- WebSocket endpoint ---
     handle_path /ws* {
-        reverse_proxy ws_gateway:8000 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
+        reverse_proxy ws_gateway:8000
+    }
+
+    # --- Voice signalling --- LiveKit websocket + HTTP API. Media is WebRTC
+    # over UDP direct to the host's 7882 and never passes through Caddy or
+    # Nginx, so that port must be open on the firewall and on the provider's
+    # security group for voice to work over the internet.
+    handle_path /livekit/* {
+        reverse_proxy livekit:7880
     }
 
     # --- Everything else -> frontend (SPA) ---
     handle /* {
-        reverse_proxy frontend:80 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
+        reverse_proxy frontend:80
     }
 }

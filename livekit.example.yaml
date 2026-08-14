@@ -1,0 +1,38 @@
+# LiveKit SFU — production config. Copy to `livekit.yaml` (gitignored) for
+# docker-compose-prod.yml. `livekit.dev.yaml` is the development one and its
+# loopback node_ip will not work here.
+#
+# API keys come from LIVEKIT_KEYS in livekit.env, and the same key/secret pair
+# must be in rest_api.env as LIVEKIT_API_KEY / LIVEKIT_API_SECRET — rest_api is
+# what mints the join tokens.
+#
+# Firewall: 7882/udp must be reachable from the internet. Caddy proxies the
+# signalling websocket at /livekit, but it cannot carry the media, and a closed
+# UDP port fails as "connects, then nobody can hear anyone".
+
+port: 7880
+
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  # Discover the public address to advertise in ICE candidates. This is the
+  # difference from the dev config, which hardcodes 127.0.0.1 because the
+  # browser is on the Docker host.
+  use_external_ip: true
+
+# Presence. rest_api's voice roster is driven entirely by these — without them
+# a user who closes a laptop lid stays listed in the channel forever.
+# `api_key` must name a key in LIVEKIT_KEYS.
+webhook:
+  api_key: devkey
+  urls:
+    - http://rest_api:8000/voice/webhook
+
+room:
+  auto_create: true
+  empty_timeout: 300
+  max_participants: 30
+
+logging:
+  level: info
+  json: true

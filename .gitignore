@@ -77,7 +77,13 @@ ghcr_config.json
 image_publisher.ps1
 Caddyfile
 
+# Prod LiveKit config, copied from livekit.example.yaml. The dev one
+# (livekit.dev.yaml) is checked in — it holds no secrets.
+livekit.yaml
+
 # Others
 AGENTS.md
 tasks.md
 timeline.md
+deploy.md
+/.claude

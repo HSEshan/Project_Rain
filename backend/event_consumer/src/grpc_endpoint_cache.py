@@ -51,8 +51,16 @@ class GrpcEndpointCache:
                 receiver_id
             )
 
-        # Cache with timestamp
-        self.endpoint_cache[cache_key] = (current_time, endpoints)
+        # Only cache a positive result. "Nobody is connected" is the one answer
+        # that changes the instant a client reconnects, and caching it for 30s
+        # means every event to that channel is dropped for the rest of the
+        # window even though the gateway has already re-registered itself — a
+        # page refresh was enough to silence a channel.
+        if endpoints:
+            self.endpoint_cache[cache_key] = (current_time, endpoints)
+        else:
+            self.endpoint_cache.pop(cache_key, None)
+
         logger.debug(
             "Fetched endpoints from Redis", receiver_id=receiver_id, endpoints=endpoints
         )

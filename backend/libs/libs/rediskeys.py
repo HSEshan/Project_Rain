@@ -12,6 +12,16 @@ class RediKeys:
         return f"channel:{channel_id}:grpc_endpoints"
 
     @staticmethod
+    def channel_voice_members(channel_id: str) -> str:
+        """Users currently connected to a voice channel's SFU room.
+
+        Written by rest_api on voice join/leave. It is a cache of what LiveKit
+        knows, kept so that a client can render "who is in here" without
+        connecting to the room first.
+        """
+        return f"channel:{channel_id}:voice_members"
+
+    @staticmethod
     def stream_shard(shard_id: str) -> str:
         return f"stream_shard:{shard_id}"
 

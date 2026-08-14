@@ -1,9 +1,10 @@
 """Builders for the events rest_api publishes.
 
-All of these are user-addressed (`receiver_id` is a user id, see
-`libs.event.schema.USER_ADDRESSED_EVENT_TYPES`). `sender_id` is whoever caused
-the change. Keeping construction here means the metadata contract with the
-frontend lives in one file rather than being spelled out at each call site.
+Most of these are user-addressed (`receiver_id` is a user id, see
+`libs.event.schema.USER_ADDRESSED_EVENT_TYPES`); `voice_state_changed` is the
+exception and is addressed to a channel. `sender_id` is whoever caused the
+change. Keeping construction here means the metadata contract with the frontend
+lives in one file rather than being spelled out at each call site.
 """
 
 from typing import Optional
@@ -62,15 +63,43 @@ def guild_invite_received(
     guild_id: str,
     guild_name: str,
     from_user_id: str,
+    from_username: str,
     to_user_id: str,
 ) -> Event:
     return Event(
         event_type=EventType.NOTIFICATION,
         sender_id=str(from_user_id),
         receiver_id=str(to_user_id),
-        text=f"You were invited to {guild_name}",
+        text=f"{from_username} invited you to {guild_name}",
         metadata={
             "action": EventAction.GUILD_INVITE_RECEIVED.value,
+            "invite_id": str(invite_id),
+            "guild_id": str(guild_id),
+            "guild_name": guild_name,
+            "from_username": from_username,
+        },
+    )
+
+
+def guild_invite_removed(
+    *,
+    invite_id: str,
+    guild_id: str,
+    guild_name: str,
+    user_id: str,
+) -> Event:
+    """An invite is no longer pending because its recipient declined it.
+
+    Addressed to the recipient rather than the inviter: a user can hold several
+    sockets, and the other tabs are still showing the invite they just refused.
+    """
+    return Event(
+        event_type=EventType.NOTIFICATION,
+        sender_id=str(user_id),
+        receiver_id=str(user_id),
+        text=f"You declined the invitation to {guild_name}",
+        metadata={
+            "action": EventAction.GUILD_INVITE_REMOVED.value,
             "invite_id": str(invite_id),
             "guild_id": str(guild_id),
             "guild_name": guild_name,
@@ -103,4 +132,30 @@ def channels_changed(
         receiver_id=str(to_user_id),
         text=text,
         metadata=metadata,
+    )
+
+
+def voice_state_changed(
+    *, actor_id: str, actor_username: str, channel_id: str, joined: bool
+) -> Event:
+    """Someone joined or left a voice channel.
+
+    Channel-addressed, unlike everything else in this file: it goes to the
+    channel's members so their channel list updates, which is the same fan-out
+    a chat message gets. This carries presence only — the audio is between the
+    client and the SFU.
+    """
+    action = EventAction.VOICE_JOINED if joined else EventAction.VOICE_LEFT
+    verb = "joined" if joined else "left"
+    return Event(
+        event_type=EventType.VOICE_STATE,
+        sender_id=str(actor_id),
+        receiver_id=str(channel_id),
+        text=f"{actor_username} {verb} voice",
+        metadata={
+            "action": action.value,
+            "channel_id": str(channel_id),
+            "user_id": str(actor_id),
+            "username": actor_username,
+        },
     )

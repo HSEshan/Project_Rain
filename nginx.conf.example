@@ -1,0 +1,70 @@
+# Host Nginx vhost — the public entrypoint in production.
+#
+# Copy to /etc/nginx/sites-available/rain, replace every YOURDOMAIN, symlink
+# into sites-enabled, `nginx -t && systemctl reload nginx`.
+#
+# Nginx terminates TLS and hands everything to the app's Caddy edge on
+# 127.0.0.1:8081, which does the routing (/api, /ws, /livekit, SPA). One
+# proxy_pass, so this file never has to be kept in step with the app's routes.
+#
+# Media does NOT pass through here. LiveKit's audio is WebRTC to UDP 7882 (with
+# a TCP 7881 fallback) direct to this host — see DEPLOY.md.
+
+# Rain's own upgrade map. The name is prefixed because `map` is http-level and
+# a second vhost on this box declaring `$connection_upgrade` would collide and
+# fail `nginx -t`.
+map $http_upgrade $rain_connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name YOURDOMAIN;
+
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name YOURDOMAIN;
+
+    ssl_certificate     /etc/letsencrypt/live/YOURDOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/YOURDOMAIN/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # Chat is websockets; a small upload cap is still worth having.
+    client_max_body_size 10m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8081;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $rain_connection_upgrade;
+
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        # The app is behind TLS even though this hop is plain HTTP. Without
+        # this the client would be told to use ws:// and the browser would
+        # refuse it as mixed content on an https:// page.
+        proxy_set_header X-Forwarded-Proto https;
+
+        # Both /ws and /livekit hold a socket open with long idle gaps. The
+        # 60s default closes them mid-call and the client reconnect-loops.
+        proxy_read_timeout  3600s;
+        proxy_send_timeout  3600s;
+        proxy_buffering     off;
+    }
+}

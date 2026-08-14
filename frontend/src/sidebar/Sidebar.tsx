@@ -7,9 +7,11 @@ import { PiShield } from "react-icons/pi";
 import { RiHome2Line } from "react-icons/ri";
 import { useLocation, useNavigate } from "react-router-dom";
 import { resetAllStores } from "../shared/resetStores";
+import { useGuildStore } from "../guild/guildStore";
 
 export function Sidebar() {
   const { isConnected, disconnect } = useWebSocket();
+  const invites = useGuildStore((state) => state.invites);
   const { logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -44,8 +46,11 @@ export function Sidebar() {
       </SideBarButton>
       <SideBarButton
         to="/guild"
-        toolTipText="Guilds"
+        toolTipText={
+          invites.length > 0 ? `Guilds — ${invites.length} invitation(s)` : "Guilds"
+        }
         active={location.pathname.startsWith("/guild")}
+        badge={invites.length}
       >
         <PiShield size={30} />
       </SideBarButton>

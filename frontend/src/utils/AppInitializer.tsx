@@ -5,7 +5,7 @@ import { useUserStore } from "../shared/userStore";
 import { useFriendStore } from "../friends/friendStore";
 
 export default function AppInitializer() {
-  const { fetchUserGuilds } = useGuildStore();
+  const { fetchUserGuilds, fetchInvites } = useGuildStore();
   const { participants, fetchUserChannels, fetchDMChannelParticipants } =
     useChannelStore();
   const { fetchUsers, mergeUsers } = useUserStore();
@@ -24,6 +24,7 @@ export default function AppInitializer() {
         await Promise.allSettled([
           fetchUserChannels(),
           fetchUserGuilds(),
+          fetchInvites(),
           fetchFriends(),
           fetchFriendRequests(),
           fetchOutgoingRequests(),
@@ -38,6 +39,7 @@ export default function AppInitializer() {
     initializeApp();
   }, [
     fetchUserGuilds,
+    fetchInvites,
     fetchUserChannels,
     fetchDMChannelParticipants,
     fetchFriends,

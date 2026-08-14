@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from enum import Enum
+from typing import Optional
 
 from libs.db.base import Base, generate_id, generate_timestamp
 from sqlalchemy import UUID, DateTime
@@ -68,6 +69,12 @@ class GuildInvite(Base):
     )
     user_id: Mapped[str] = mapped_column(
         UUID, ForeignKey("users.id", ondelete="CASCADE"), index=True, primary_key=True
+    )
+    # Who sent it, so the recipient can see more than a guild name. Nullable
+    # because invites predating this column have no answer, and because the
+    # inviter may later delete their account — the invite is still valid.
+    inviter_id: Mapped[Optional[str]] = mapped_column(
+        UUID, ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
     )
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -99,6 +99,27 @@ services:
     volumes:
       - ./backend/lease_manager:/app
 
+  # Voice SFU. Media is UDP straight from the browser to 7882 on the host — it
+  # does not go through Caddy, and it never touches the Redis/gRPC chat path.
+  # Only the signalling websocket (7880) is proxied, at /livekit.
+  livekit:
+    # Keep in step with `livekit-client` in frontend/package.json: a client
+    # newer than the server probes /rtc/v1, 404s, and only then falls back.
+    image: livekit/livekit-server:v1.10
+    command: --config /etc/livekit.yaml
+    env_file:
+      - ./livekit.dev.env
+    volumes:
+      - ./livekit.dev.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "7881:7881"
+      - "7882:7882/udp"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:7880/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   frontend:
     build:
       context: ./frontend
@@ -116,6 +137,7 @@ services:
       - rest_api
       - ws_gateway
       - frontend
+      - livekit
     ports:
       - "8080:8080"
     volumes:

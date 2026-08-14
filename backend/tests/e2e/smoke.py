@@ -82,6 +82,31 @@ def register(tag):
     return {"id": created["id"], "username": username, "token": token}
 
 
+def psql(statement: str) -> bool:
+    """Run SQL against the dev database, for row shapes REST cannot create.
+
+    Returns False (and skips the caller's check) when the docker CLI is absent,
+    the same way `run_probe` degrades.
+    """
+    try:
+        result = subprocess.run(
+            [
+                "docker", "compose", "exec", "-T", "postgres",
+                "psql", "-U", "superuser", "-d", "devdb", "-c", statement,
+            ],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        print("  SKIP  sql fixture (docker CLI not found)")
+        return False
+
+    if result.returncode != 0:
+        FAILURES.append(f"psql failed: {result.stderr[-400:]}")
+        return False
+    return True
+
+
 def run_probe(script_name: str, ctx: dict, label: str):
     """Websocket clients live in the gateway container: it has `websockets` and
     sits on the compose network."""
@@ -249,6 +274,25 @@ status, _ = call(
 )
 check("duplicate invite rejected", status == 409, f"got {status}")
 
+# The invitee has to be able to find the invite after a reload, not only catch
+# the realtime event
+status, pending = call("GET", "/guilds/invites/me", token=bob["token"], expect=200)
+check(
+    "invitee can list the pending invite",
+    [i["invite_id"] for i in pending or []] == [invite_id]
+    # carries the guild name so the list needs no second round trip
+    and (pending or [{}])[0].get("guild_name") == "Rainforest",
+    str(pending),
+)
+check(
+    "pending invite names the inviter",
+    (pending or [{}])[0].get("inviter_id") == alice["id"]
+    and (pending or [{}])[0].get("inviter_username") == alice["username"],
+    str(pending),
+)
+status, pending = call("GET", "/guilds/invites/me", token=carol["token"], expect=200)
+check("invites are per user", pending == [], str(pending))
+
 status, member = call(
     "POST",
     f"/guilds/{guild_id}/invites/{invite_id}/accept",
@@ -256,6 +300,9 @@ status, member = call(
     expect=201,
 )
 check("invite accepted", status == 201, str(member))
+
+status, pending = call("GET", "/guilds/invites/me", token=bob["token"], expect=200)
+check("accepting clears the pending invite", pending == [], str(pending))
 
 status, bob_channels = call("GET", "/channels/me", token=bob["token"], expect=200)
 bob_guild_channels = sorted(
@@ -271,6 +318,103 @@ status, _ = call(
     "POST", f"/guilds/{guild_id}/invites/{invite_id}/accept", token=bob["token"]
 )
 check("invite is single use", status == 404, f"got {status}")
+
+# The UI invites by username — a person types a name, not a uuid
+status, by_name = call(
+    "POST",
+    f"/guilds/{guild_id}/invite",
+    {"username": carol["username"]},
+    token=alice["token"],
+    expect=201,
+)
+check("invite by username", status == 201, str(by_name))
+
+status, body = call(
+    "POST", f"/guilds/{guild_id}/invite", {"username": "no_such_user"},
+    token=alice["token"],
+)
+check("invite to an unknown username is 404", status == 404, f"got {status}")
+
+status, body = call(
+    "POST",
+    f"/guilds/{guild_id}/invite",
+    {"username": carol["username"], "user_id": carol["id"]},
+    token=alice["token"],
+)
+check("invite must name the user exactly once", status == 422, f"got {status}")
+
+status, body = call("POST", f"/guilds/{guild_id}/invite", {}, token=alice["token"])
+check("invite with no target is rejected", status == 422, f"got {status}")
+
+print("== decline invite ==")
+# Carol is holding the invite created by username just above
+status, pending = call("GET", "/guilds/invites/me", token=carol["token"], expect=200)
+carol_invite_id = (pending or [{}])[0].get("invite_id")
+check("invitee sees the invite before declining", bool(carol_invite_id), str(pending))
+
+status, _ = call(
+    "DELETE",
+    f"/guilds/{guild_id}/invites/{carol_invite_id}",
+    token=alice["token"],
+)
+check("only the recipient can decline an invite", status == 403, f"got {status}")
+
+status, _ = call(
+    "DELETE",
+    f"/guilds/{guild_id}/invites/{carol_invite_id}",
+    token=carol["token"],
+    expect=204,
+)
+check("invitee declined the invite", status == 204, f"got {status}")
+
+status, pending = call("GET", "/guilds/invites/me", token=carol["token"], expect=200)
+check("declining clears the pending invite", pending == [], str(pending))
+
+# Declining must not join the guild — that is the whole point of the button
+status, carol_guilds = call("GET", "/guilds/me", token=carol["token"], expect=200)
+check(
+    "declining does not join the guild",
+    not [g for g in carol_guilds or [] if g["id"] == guild_id],
+    str(carol_guilds),
+)
+
+status, _ = call(
+    "DELETE", f"/guilds/{guild_id}/invites/{carol_invite_id}", token=carol["token"]
+)
+check("declining a consumed invite is 404", status == 404, f"got {status}")
+
+status, _ = call(
+    "POST",
+    f"/guilds/{guild_id}/invites/{carol_invite_id}/accept",
+    token=carol["token"],
+)
+check("a declined invite cannot be accepted", status == 404, f"got {status}")
+
+# Declining is not permanent — the guild can ask again
+status, reinvite = call(
+    "POST",
+    f"/guilds/{guild_id}/invite",
+    {"user_id": carol["id"]},
+    token=alice["token"],
+    expect=201,
+)
+check("can be re-invited after declining", status == 201, f"got {status}")
+
+# `inviter_id` is nullable and was not backfilled, so the listing has to outer
+# join it. An inner join would hide every invite created before the column —
+# which is exactly the row shape this forces.
+if psql(
+    "UPDATE guild_invites SET inviter_id = NULL WHERE invite_id = "
+    f"'{(reinvite or {}).get('invite_id')}'"
+):
+    status, pending = call("GET", "/guilds/invites/me", token=carol["token"])
+    check(
+        "an invite with no inviter is still listed",
+        [i["invite_id"] for i in pending or []]
+        == [(reinvite or {}).get("invite_id")]
+        and (pending or [{}])[0].get("inviter_username") is None,
+        str(pending),
+    )
 
 print("== remove member ==")
 status, _ = call(
@@ -324,6 +468,50 @@ run_probe(
     {"alice": register("rt_alice"), "bob": register("rt_bob")},
     "realtime probe",
 )
+
+print("== voice (livekit sfu) ==")
+
+
+def livekit_credentials():
+    """Read the SFU key pair out of the running rest_api container.
+
+    The voice probe has to sign LiveKit webhooks and server-API calls, and
+    rest_api is where that secret already lives — better than teaching the
+    smoke test to parse env files it does not own.
+    """
+    try:
+        result = subprocess.run(
+            ["docker", "compose", "exec", "-T", "rest_api", "printenv"],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        return None
+    env = dict(
+        line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
+    )
+    secret = env.get("LIVEKIT_API_SECRET")
+    return (
+        {"key": env.get("LIVEKIT_API_KEY", "devkey"), "secret": secret}
+        if secret
+        else None
+    )
+
+
+livekit = livekit_credentials()
+if not livekit:
+    print("  SKIP  voice probe (LIVEKIT_API_SECRET not set on rest_api)")
+else:
+    run_probe(
+        "voice_probe.py",
+        {
+            "alice": register("v_alice"),
+            "bob": register("v_bob"),
+            "carol": register("v_carol"),
+            "livekit": livekit,
+        },
+        "voice probe",
+    )
 
 print()
 if FAILURES:

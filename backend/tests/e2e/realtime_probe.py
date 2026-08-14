@@ -132,7 +132,10 @@ async def main() -> int:
             )
             report("new dm channel is live without reconnect", event is not None)
 
-            # 4. guild invite reaches the invited user live
+            # 4. creating a guild makes its default channels live for the
+            # creator. Their socket connected before those channels existed, so
+            # without an event the gateway has no mapping for them and the
+            # first message sent there is persisted and then dropped.
             status, guild = call(
                 "POST",
                 "/guilds/",
@@ -140,6 +143,33 @@ async def main() -> int:
                 token=alice["token"],
             )
             guild_id = guild["id"]
+
+            event = await alice_client.wait_for(action_is("channels_changed"))
+            report("guild creation delivered to its creator", event is not None)
+
+            status, alice_channels = call("GET", "/channels/me", token=alice["token"])
+            creator_text = next(
+                c["id"]
+                for c in alice_channels
+                if c.get("guild_id") == guild_id and c["name"] == "general-text"
+            )
+            await asyncio.sleep(1)
+            await alice_ws.send(
+                json.dumps(
+                    {
+                        "event_type": "message",
+                        "receiver_id": creator_text,
+                        "text": "first message in a brand new guild",
+                    }
+                )
+            )
+            event = await alice_client.wait_for(
+                lambda e: e.get("text") == "first message in a brand new guild"
+            )
+            report(
+                "creator's first message in a new guild comes back without a reload",
+                event is not None,
+            )
             status, invite = call(
                 "POST",
                 f"/guilds/{guild_id}/invite",
@@ -197,6 +227,42 @@ async def main() -> int:
                 == new_channel["id"]
             )
             report("channel creation delivered to guild members", event is not None)
+
+            # 8. declining an invite is published back to the decliner, so a
+            # second tab of theirs drops the offer it is still showing. It is
+            # not a membership change, so it must not claim channels_changed.
+            status, second_guild = call(
+                "POST",
+                "/guilds/",
+                {"name": "Declined Guild", "description": "probe"},
+                token=alice["token"],
+            )
+            status, declinable = call(
+                "POST",
+                f"/guilds/{second_guild['id']}/invite",
+                {"user_id": bob["id"]},
+                token=alice["token"],
+            )
+            event = await bob_client.wait_for(
+                lambda e: (e.get("metadata") or {}).get("invite_id")
+                == declinable["invite_id"]
+                and (e.get("metadata") or {}).get("action") == "guild_invite_received"
+            )
+            report("second guild invite delivered over ws", event is not None)
+
+            call(
+                "DELETE",
+                f"/guilds/{second_guild['id']}/invites/{declinable['invite_id']}",
+                token=bob["token"],
+            )
+            event = await bob_client.wait_for(action_is("guild_invite_removed"))
+            report("declining an invite is delivered to the decliner", event is not None)
+            report(
+                "declining does not claim a membership change",
+                event is not None
+                and not (event.get("metadata") or {}).get("channels_changed"),
+                str(event),
+            )
 
             alice_client.stop()
             bob_client.stop()

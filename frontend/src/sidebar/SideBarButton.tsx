@@ -7,6 +7,8 @@ export interface SideBarButtonProps {
   toolTipText?: string;
   onClick?: () => void;
   active?: boolean;
+  /** Count bubble for things waiting behind this button; hidden when zero. */
+  badge?: number;
 }
 
 export default function SideBarButton({
@@ -15,10 +17,22 @@ export default function SideBarButton({
   toolTipText,
   onClick,
   active,
+  badge,
 }: SideBarButtonProps) {
-  const className = `w-12 h-12 flex flex-col items-center justify-center rounded-xl cursor-pointer ${
+  const className = `relative w-12 h-12 flex flex-col items-center justify-center rounded-xl cursor-pointer ${
     active ? "bg-gray-800 text-blue-500" : "bg-gray-700 text-white"
   }`;
+
+  const content = (
+    <>
+      {children}
+      {!!badge && (
+        <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1.5 flex items-center justify-center text-xs font-bold bg-red-500 text-white rounded-full">
+          {badge}
+        </span>
+      )}
+    </>
+  );
 
   return (
     <Tooltip
@@ -33,11 +47,11 @@ export default function SideBarButton({
           rendering a Link to "" would also navigate to the current route. */}
       {to ? (
         <Link to={to} onClick={onClick} className={className}>
-          {children}
+          {content}
         </Link>
       ) : (
         <button type="button" onClick={onClick} className={className}>
-          {children}
+          {content}
         </button>
       )}
     </Tooltip>

@@ -18,6 +18,8 @@ import FriendsPage from "./friends/FriendsPage";
 import AddFriendModal from "./friends/AddFriendModal";
 import GuildCreateModal from "./guild/GuildCreateModal";
 import GuildChannelCreateModal from "./guild/GuildChannelCreateModal";
+import GuildInviteModal from "./guild/GuildInviteModal";
+import GuildInviteInboxModal from "./guild/GuildInviteInboxModal";
 
 function MainLayout() {
   return (
@@ -33,6 +35,8 @@ function MainLayout() {
         <AddFriendModal />
         <GuildCreateModal />
         <GuildChannelCreateModal />
+        <GuildInviteModal />
+        <GuildInviteInboxModal />
       </WebSocketProvider>
     </div>
   );
