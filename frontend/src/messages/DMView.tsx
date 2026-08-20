@@ -1,4 +1,5 @@
 import { useParams } from "react-router-dom";
+import { FiAtSign } from "react-icons/fi";
 import { useChannelStore } from "../shared/channelStore";
 import { useUserStore } from "../shared/userStore";
 import { MessageView } from "./MessageView";
@@ -16,5 +17,12 @@ export function DMView() {
     .filter(Boolean)
     .join(", ");
 
-  return <MessageView channelId={dmId} title={names || "Loading..."} />;
+  return (
+    <MessageView
+      channelId={dmId}
+      title={names || "Loading…"}
+      icon={<FiAtSign size={16} />}
+      subtitle="Direct message"
+    />
+  );
 }

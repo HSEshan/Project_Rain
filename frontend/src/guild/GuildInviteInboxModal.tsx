@@ -1,4 +1,5 @@
 import Modal from "../shared/Modal";
+import { Button } from "../shared/Button";
 import GuildInviteList from "./GuildInviteList";
 import { useGuildStore } from "./guildStore";
 
@@ -18,23 +19,20 @@ export default function GuildInviteInboxModal() {
       isOpen={inviteInboxOpen}
       onClose={() => setInviteInboxOpen(false)}
       title="Guild invitations"
+      description="Guilds you have been invited to join."
     >
       <div className="space-y-5">
         <GuildInviteList
           onAccepted={() => setInviteInboxOpen(false)}
           emptyState={
-            <p className="text-sm text-gray-500">
+            <p className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-4 py-6 text-center text-sm text-ink-400">
               No pending guild invitations.
             </p>
           }
         />
-        <button
-          type="button"
-          onClick={() => setInviteInboxOpen(false)}
-          className="w-full px-4 py-2 text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
-        >
+        <Button full onClick={() => setInviteInboxOpen(false)}>
           Done
-        </button>
+        </Button>
       </div>
     </Modal>
   );

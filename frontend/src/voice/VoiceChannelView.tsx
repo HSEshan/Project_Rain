@@ -1,24 +1,114 @@
 import { useEffect } from "react";
-import { FiMic, FiMicOff, FiPhoneOff, FiVolume2, FiVolumeX } from "react-icons/fi";
+import {
+  FiMic,
+  FiMicOff,
+  FiPhoneOff,
+  FiVolume2,
+  FiVolumeX,
+} from "react-icons/fi";
 import { useAuth } from "../auth/AuthContext";
 import { useUserStore } from "../shared/userStore";
 import type { Channel } from "../shared/types";
+import Avatar from "../shared/Avatar";
+import { Button } from "../shared/Button";
+import ViewHeader from "../shared/ViewHeader";
 import { useVoiceStore } from "./voiceStore";
 
-function ParticipantTile({ userId }: { userId: string }) {
+function ParticipantTile({
+  userId,
+  isSelf,
+  muted,
+}: {
+  userId: string;
+  isSelf: boolean;
+  muted: boolean;
+}) {
   const user = useUserStore((state) => state.users[userId]);
   const name = user?.username ?? "…";
+
   return (
-    <div className="flex flex-col items-center gap-2 w-28 py-4 rounded-lg bg-gray-900">
-      <div className="w-14 h-14 rounded-full bg-gray-700 text-white flex items-center justify-center text-xl">
-        {name.charAt(0).toUpperCase()}
+    <div className="flex w-32 flex-col items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-3 py-5 transition-colors hover:border-white/[0.12] sm:w-36">
+      <Avatar name={name} seed={userId} size="xl" />
+      <div className="flex w-full items-center justify-center gap-1.5">
+        <span className="truncate text-sm text-ink-200">{name}</span>
+        {isSelf && muted && (
+          <FiMicOff size={13} className="shrink-0 text-red-400" />
+        )}
       </div>
-      <span className="text-sm text-gray-300 truncate max-w-full px-2">{name}</span>
+      {isSelf && (
+        <span className="-mt-1.5 text-[10px] uppercase tracking-wide text-ink-500">
+          You
+        </span>
+      )}
     </div>
   );
 }
 
-export default function VoiceChannelView({ channel }: { channel: Channel }) {
+/**
+ * Control bar for a live session. Fixed to the bottom of the view so the
+ * disconnect button is always reachable, however long the roster gets.
+ */
+function ControlBar({
+  muted,
+  deafened,
+  onMute,
+  onDeafen,
+  onLeave,
+}: {
+  muted: boolean;
+  deafened: boolean;
+  onMute: () => void;
+  onDeafen: () => void;
+  onLeave: () => void;
+}) {
+  const circle =
+    "flex h-12 w-12 items-center justify-center rounded-full transition-all duration-200";
+
+  return (
+    <div className="glass flex items-center gap-2.5 rounded-full p-2 shadow-lift">
+      <button
+        onClick={onMute}
+        title={muted ? "Unmute" : "Mute"}
+        aria-label={muted ? "Unmute" : "Mute"}
+        className={`${circle} ${
+          muted
+            ? "bg-red-500/90 text-white hover:bg-red-500"
+            : "bg-white/[0.08] text-ink-100 hover:bg-white/[0.14]"
+        }`}
+      >
+        {muted ? <FiMicOff size={17} /> : <FiMic size={17} />}
+      </button>
+      <button
+        onClick={onDeafen}
+        title={deafened ? "Undeafen" : "Deafen"}
+        aria-label={deafened ? "Undeafen" : "Deafen"}
+        className={`${circle} ${
+          deafened
+            ? "bg-red-500/90 text-white hover:bg-red-500"
+            : "bg-white/[0.08] text-ink-100 hover:bg-white/[0.14]"
+        }`}
+      >
+        {deafened ? <FiVolumeX size={17} /> : <FiVolume2 size={17} />}
+      </button>
+      <button
+        onClick={onLeave}
+        title="Disconnect"
+        aria-label="Disconnect"
+        className={`${circle} bg-red-500 text-white hover:bg-red-400`}
+      >
+        <FiPhoneOff size={17} />
+      </button>
+    </div>
+  );
+}
+
+export default function VoiceChannelView({
+  channel,
+  actions,
+}: {
+  channel: Channel;
+  actions?: React.ReactNode;
+}) {
   const {
     activeChannelId,
     connecting,
@@ -49,68 +139,82 @@ export default function VoiceChannelView({ channel }: { channel: Channel }) {
   }, [participants, fetchUsers]);
 
   return (
-    <div className="flex-1 flex flex-col">
-      <div className="px-4 py-3 border-b border-gray-700 text-white font-semibold">
-        🔊 {channel.name}
-      </div>
+    <div className="flex min-w-0 flex-1 flex-col bg-ink-950">
+      <ViewHeader
+        icon={<FiVolume2 size={16} />}
+        title={channel.name ?? "voice"}
+        subtitle={
+          participants.length > 0
+            ? `${participants.length} in voice`
+            : "Voice channel"
+        }
+        actions={actions}
+      />
 
-      <div className="flex-1 flex flex-col items-center justify-center gap-8 p-6">
+      <div className="relative flex flex-1 flex-col items-center justify-center gap-10 overflow-y-auto p-6">
+        {/* Soft stage light behind the roster while a call is live */}
+        {connected && (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-1/3 h-96 w-96 max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-full bg-rain-500/10 blur-[100px]"
+          />
+        )}
+
         {participants.length > 0 ? (
-          <div className="flex flex-wrap gap-4 justify-center">
+          <div className="relative flex flex-wrap justify-center gap-3">
             {participants.map((userId) => (
-              <ParticipantTile key={userId} userId={userId} />
+              <ParticipantTile
+                key={userId}
+                userId={userId}
+                isSelf={userId === currentUserId}
+                muted={muted}
+              />
             ))}
           </div>
         ) : (
-          <p className="text-gray-500">Nobody is in here yet.</p>
-        )}
-
-        {error && <p className="text-red-400 text-sm max-w-md text-center">{error}</p>}
-
-        {connected ? (
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => void toggleMute()}
-              title={muted ? "Unmute" : "Mute"}
-              className={`p-3 rounded-full transition-colors ${
-                muted
-                  ? "bg-red-600 hover:bg-red-500"
-                  : "bg-gray-700 hover:bg-gray-600"
-              } text-white`}
-            >
-              {muted ? <FiMicOff /> : <FiMic />}
-            </button>
-            <button
-              onClick={() => void toggleDeafen()}
-              title={deafened ? "Undeafen" : "Deafen"}
-              className={`p-3 rounded-full transition-colors ${
-                deafened
-                  ? "bg-red-600 hover:bg-red-500"
-                  : "bg-gray-700 hover:bg-gray-600"
-              } text-white`}
-            >
-              {deafened ? <FiVolumeX /> : <FiVolume2 />}
-            </button>
-            <button
-              onClick={() => void leave()}
-              title="Disconnect"
-              className="p-3 rounded-full bg-red-600 hover:bg-red-500 text-white transition-colors"
-            >
-              <FiPhoneOff />
-            </button>
+          <div className="relative flex flex-col items-center gap-3 text-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-ink-400">
+              <FiVolume2 size={24} />
+            </span>
+            <p className="text-lg font-medium text-ink-100">
+              Nobody is in here yet
+            </p>
+            <p className="max-w-xs text-sm text-ink-400">
+              Join the channel and anyone else in the guild can drop in.
+            </p>
           </div>
-        ) : (
-          <button
-            onClick={() => void join(channel.id)}
-            disabled={connecting}
-            className="px-6 py-2 rounded-md bg-green-600 hover:bg-green-500 disabled:bg-gray-600 text-white transition-colors"
-          >
-            {connecting ? "Connecting…" : "Join voice"}
-          </button>
         )}
+
+        {error && (
+          <p className="relative max-w-md rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-2.5 text-center text-sm text-amber-300">
+            {error}
+          </p>
+        )}
+
+        <div className="relative">
+          {connected ? (
+            <ControlBar
+              muted={muted}
+              deafened={deafened}
+              onMute={() => void toggleMute()}
+              onDeafen={() => void toggleDeafen()}
+              onLeave={() => void leave()}
+            />
+          ) : (
+            <Button
+              variant="primary"
+              size="lg"
+              loading={connecting}
+              onClick={() => void join(channel.id)}
+              icon={!connecting ? <FiMic size={16} /> : undefined}
+            >
+              {connecting ? "Connecting…" : "Join voice"}
+            </Button>
+          )}
+        </div>
 
         {connected && currentUserId && !participants.includes(currentUserId) && (
-          <p className="text-xs text-gray-500">
+          <p className="relative text-xs text-ink-500">
             Connected. Waiting for the roster to catch up…
           </p>
         )}

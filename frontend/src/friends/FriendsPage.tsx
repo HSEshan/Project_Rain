@@ -1,95 +1,161 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FiMessageCircle, FiUserPlus, FiUsers } from "react-icons/fi";
 import { useFriendStore } from "./friendStore";
 import { useChannelStore } from "../shared/channelStore";
 import { useUserStore } from "../shared/userStore";
 import FriendRequestList from "./FriendRequestList";
-import { PiUserCircle } from "react-icons/pi";
+import Avatar from "../shared/Avatar";
+import Badge from "../shared/Badge";
+import { Button } from "../shared/Button";
+import EmptyState from "../shared/EmptyState";
+import ViewHeader from "../shared/ViewHeader";
+
+type Tab = "all" | "incoming" | "sent";
 
 /** Landing panel for /dm — friends, incoming requests and outgoing requests. */
 export default function FriendsPage() {
-  const { friends, outgoingRequests, setIsModalOpen } = useFriendStore();
+  const { friends, outgoingRequests, friendRequests, setIsModalOpen } =
+    useFriendStore();
   const { getDMChannelWithUser } = useChannelStore();
   const { getUser: getUserFromStore } = useUserStore();
   const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>("all");
 
   const openDM = (userId: string) => {
     const channel = getDMChannelWithUser(userId);
     if (channel) navigate(`/dm/${channel.id}`);
   };
 
+  const tabs: { id: Tab; label: string; count: number }[] = [
+    { id: "all", label: "All", count: friends.length },
+    { id: "incoming", label: "Incoming", count: friendRequests.length },
+    { id: "sent", label: "Sent", count: outgoingRequests.length },
+  ];
+
   return (
-    <div className="flex-1 overflow-y-auto p-8 text-white">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">Friends</h1>
-        <button
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
-          onClick={() => setIsModalOpen(true)}
-        >
-          Add Friend
-        </button>
+    <div className="flex min-w-0 flex-1 flex-col bg-ink-950">
+      <ViewHeader
+        icon={<FiUsers size={16} />}
+        title="Friends"
+        actions={
+          <Button
+            size="sm"
+            variant="primary"
+            icon={<FiUserPlus size={14} />}
+            onClick={() => setIsModalOpen(true)}
+          >
+            <span className="hidden sm:inline">Add friend</span>
+          </Button>
+        }
+      />
+
+      <div className="flex shrink-0 gap-1 border-b border-white/[0.06] px-3 sm:px-6">
+        {tabs.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => setTab(item.id)}
+            className={`relative flex items-center gap-2 px-3 py-3 text-sm transition-colors ${
+              tab === item.id
+                ? "text-white"
+                : "text-ink-400 hover:text-ink-200"
+            }`}
+          >
+            {item.label}
+            {item.id === "incoming" ? (
+              <Badge count={item.count} />
+            ) : (
+              <span className="text-xs text-ink-500">{item.count}</span>
+            )}
+            {tab === item.id && (
+              <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-rain-400" />
+            )}
+          </button>
+        ))}
       </div>
 
-      <section className="mb-8">
-        <h2 className="text-xs uppercase tracking-wide text-gray-400 mb-2">
-          All friends — {friends.length}
-        </h2>
-        {friends.length === 0 ? (
-          <p className="text-sm text-gray-500">
-            No friends yet. Add someone by username to get started.
-          </p>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {friends.map((friend) => (
-              <div
-                key={friend.id}
-                className="flex items-center gap-3 px-3 py-2 bg-gray-900 rounded-md"
-              >
-                <PiUserCircle size={28} />
-                <span className="flex-1 truncate">{friend.username}</span>
-                <button
-                  className="text-sm px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors disabled:opacity-40"
-                  onClick={() => openDM(friend.id)}
-                  disabled={!getDMChannelWithUser(friend.id)}
-                >
-                  Message
-                </button>
-              </div>
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+          {tab === "all" &&
+            (friends.length === 0 ? (
+              <EmptyState
+                icon={<FiUsers size={22} />}
+                title="No friends yet"
+                hint="Add someone by their username. Once they accept, a direct message channel opens for both of you."
+                action={
+                  <Button
+                    variant="primary"
+                    icon={<FiUserPlus size={14} />}
+                    onClick={() => setIsModalOpen(true)}
+                  >
+                    Add a friend
+                  </Button>
+                }
+              />
+            ) : (
+              <ul className="space-y-1.5">
+                {friends.map((friend) => {
+                  const channel = getDMChannelWithUser(friend.id);
+                  return (
+                    <li
+                      key={friend.id}
+                      className="group flex items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 py-3 transition-colors hover:border-white/10 hover:bg-white/[0.04]"
+                    >
+                      <Avatar name={friend.username} seed={friend.id} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium text-ink-100">
+                          {friend.username}
+                        </span>
+                        <span className="text-xs text-ink-500">Friend</span>
+                      </span>
+                      <Button
+                        size="sm"
+                        icon={<FiMessageCircle size={14} />}
+                        onClick={() => openDM(friend.id)}
+                        disabled={!channel}
+                        title={channel ? "Open DM" : "DM channel not ready yet"}
+                      >
+                        Message
+                      </Button>
+                    </li>
+                  );
+                })}
+              </ul>
             ))}
-          </div>
-        )}
-      </section>
 
-      <section className="mb-8">
-        <h2 className="text-xs uppercase tracking-wide text-gray-400 mb-2">
-          Incoming requests
-        </h2>
-        <FriendRequestList />
-      </section>
+          {tab === "incoming" && <FriendRequestList />}
 
-      <section>
-        <h2 className="text-xs uppercase tracking-wide text-gray-400 mb-2">
-          Sent requests — {outgoingRequests.length}
-        </h2>
-        {outgoingRequests.length === 0 ? (
-          <p className="text-sm text-gray-500">No pending sent requests</p>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {outgoingRequests.map((request) => (
-              <div
-                key={request.id}
-                className="flex items-center gap-3 px-3 py-2 bg-gray-900 rounded-md text-sm"
-              >
-                <PiUserCircle size={24} />
-                <span className="flex-1 truncate">
-                  {getUserFromStore(request.to_user_id)?.username ??
-                    "Loading..."}
-                </span>
-                <span className="text-gray-500">pending</span>
-              </div>
+          {tab === "sent" &&
+            (outgoingRequests.length === 0 ? (
+              <EmptyState
+                icon={<FiUserPlus size={22} />}
+                title="Nothing pending"
+                hint="Requests you send appear here until they are accepted."
+              />
+            ) : (
+              <ul className="space-y-1.5">
+                {outgoingRequests.map((request) => (
+                  <li
+                    key={request.id}
+                    className="flex items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 py-3"
+                  >
+                    <Avatar
+                      name={getUserFromStore(request.to_user_id)?.username}
+                      seed={request.to_user_id}
+                      size="sm"
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm text-ink-200">
+                      {getUserFromStore(request.to_user_id)?.username ?? "…"}
+                    </span>
+                    <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-ink-400">
+                      Pending
+                    </span>
+                  </li>
+                ))}
+              </ul>
             ))}
-          </div>
-        )}
-      </section>
+        </div>
+      </div>
     </div>
   );
 }

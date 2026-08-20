@@ -1,86 +1,116 @@
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { postSignup } from "./apiClient";
+import { FiAtSign, FiLock, FiMail } from "react-icons/fi";
 import type { AxiosResponse } from "axios";
+import { Button } from "../shared/Button";
+import { Input } from "../shared/Input";
+import { errorText } from "../shared/errors";
+import { postSignup } from "./apiClient";
 
-export default function SignupForm({
-  setIsLogin,
-}: {
-  setIsLogin: (isLogin: boolean) => void;
-}) {
+type Fields = { username: string; email: string; password: string };
+
+/**
+ * Client-side rules mirror the backend `UserCreate` model. They exist to give
+ * instant feedback, not to enforce anything — the server still validates.
+ */
+function validate(values: Fields): Partial<Fields> {
+  const errors: Partial<Fields> = {};
+  if (values.username.trim().length < 3)
+    errors.username = "At least 3 characters.";
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email))
+    errors.email = "Enter a valid email address.";
+  if (values.password.length < 8)
+    errors.password = "At least 8 characters.";
+  return errors;
+}
+
+export default function SignupForm({ onDone }: { onDone: () => void }) {
   const navigate = useNavigate();
 
   const usernameRef = useRef<HTMLInputElement>(null);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
 
-  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [errors, setErrors] = useState<Partial<Fields>>({});
+  const [formError, setFormError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrors({});
+    setFormError("");
 
-    await postSignup(
-      usernameRef.current?.value || "",
-      emailRef.current?.value || "",
-      passwordRef.current?.value || ""
-    )
+    const values: Fields = {
+      username: usernameRef.current?.value || "",
+      email: emailRef.current?.value || "",
+      password: passwordRef.current?.value || "",
+    };
+    const found = validate(values);
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
+
+    setSubmitting(true);
+    await postSignup(values.username, values.email, values.password)
       .then((res: AxiosResponse) => {
         if (res.status === 201) {
           navigate("/login?signup=true");
-          setIsLogin(true);
+          onDone();
         }
       })
-      .catch((err: Error) => {
-        setErrors({ "Signup failed": err.message });
-      });
+      .catch((err: unknown) => {
+        setFormError(errorText(err, "Could not create that account."));
+      })
+      .finally(() => setSubmitting(false));
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <h2 className="text-2xl font-semibold text-center mb-4">Sign Up</h2>
+    <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+      <div>
+        <h2 className="text-2xl font-bold text-white">Create your account</h2>
+        <p className="mt-1.5 text-sm text-ink-400">
+          Free, and takes about ten seconds.
+        </p>
+      </div>
 
-      <input
-        type="text"
+      <Input
+        label="Username"
         name="username"
-        placeholder="Username"
+        type="text"
+        autoComplete="username"
+        placeholder="How people will find you"
+        icon={<FiAtSign size={15} />}
+        error={errors.username}
         ref={usernameRef}
-        className="w-full p-2 bg-gray-700 text-white rounded"
       />
-      {errors.username && (
-        <p className="text-red-400 text-sm">{errors.username}</p>
-      )}
-
-      <input
-        type="email"
+      <Input
+        label="Email"
         name="email"
-        placeholder="Email"
+        type="email"
+        autoComplete="email"
+        placeholder="you@example.com"
+        icon={<FiMail size={15} />}
+        error={errors.email}
         ref={emailRef}
-        className="w-full p-2 bg-gray-700 text-white rounded"
       />
-      {errors.email && <p className="text-red-400 text-sm">{errors.email}</p>}
-
-      <input
-        type="password"
+      <Input
+        label="Password"
         name="password"
-        placeholder="Password"
+        type="password"
+        autoComplete="new-password"
+        placeholder="At least 8 characters"
+        icon={<FiLock size={15} />}
+        error={errors.password}
         ref={passwordRef}
-        className="w-full p-2 bg-gray-700 text-white rounded"
       />
-      {errors.password && (
-        <p className="text-red-400 text-sm">{errors.password}</p>
+
+      {formError && (
+        <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">
+          {formError}
+        </p>
       )}
 
-      {errors["Signup failed"] && (
-        <p className="text-red-400 text-sm">{errors["Signup failed"]}</p>
-      )}
-
-      <button
-        type="submit"
-        className="w-full py-2 bg-blue-600 hover:bg-blue-700 rounded text-white"
-      >
-        Sign Up
-      </button>
+      <Button type="submit" variant="primary" size="lg" full loading={submitting}>
+        {submitting ? "Creating…" : "Create account"}
+      </Button>
     </form>
   );
 }

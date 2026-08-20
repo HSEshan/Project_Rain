@@ -1,12 +1,14 @@
 import { useEffect } from "react";
-import { useMatch, useParams } from "react-router-dom";
+import { Link, useMatch, useParams } from "react-router-dom";
+import { FiHash, FiPlus, FiUserPlus, FiVolume2 } from "react-icons/fi";
 import { useGuildStore } from "./guildStore";
 import { useChannelStore } from "../shared/channelStore";
 import { useUserStore } from "../shared/userStore";
 import { useAuth } from "../auth/AuthContext";
 import { ChannelType, type Channel } from "../shared/types";
-import LinkButton from "../shared/LinkButton";
 import { useVoiceStore } from "../voice/voiceStore";
+import Avatar from "../shared/Avatar";
+import SidePanel from "../shared/SidePanel";
 
 function ChannelLink({
   channel,
@@ -17,16 +19,23 @@ function ChannelLink({
   guildId: string;
   active: boolean;
 }) {
+  const isVoice = channel.type === ChannelType.GUILD_VOICE;
   return (
-    <LinkButton
+    <Link
       to={`/guild/${guildId}/channel/${channel.id}`}
-      active={active}
-      className="justify-start"
+      className={`flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+        active
+          ? "bg-white/[0.07] text-white"
+          : "text-ink-300 hover:bg-white/[0.04] hover:text-white"
+      }`}
     >
-      <div className="flex items-center gap-2 w-full px-3 truncate">
-        {channel.type === ChannelType.GUILD_TEXT ? "💬" : "🔊"} {channel.name}
-      </div>
-    </LinkButton>
+      {isVoice ? (
+        <FiVolume2 size={14} className="shrink-0 opacity-70" />
+      ) : (
+        <FiHash size={14} className="shrink-0 opacity-70" />
+      )}
+      <span className="truncate">{channel.name}</span>
+    </Link>
   );
 }
 
@@ -41,13 +50,38 @@ function VoiceRoster({ channelId }: { channelId: string }) {
   if (!participants?.length) return null;
 
   return (
-    <ul className="pl-8 flex flex-col gap-1">
+    <ul className="mt-0.5 space-y-1 pl-8">
       {participants.map((userId) => (
-        <li key={userId} className="text-xs text-gray-400 truncate">
-          {users[userId]?.username ?? "…"}
+        <li key={userId} className="flex items-center gap-2">
+          <Avatar
+            name={users[userId]?.username}
+            seed={userId}
+            size="xs"
+            online
+          />
+          <span className="truncate text-xs text-ink-400">
+            {users[userId]?.username ?? "…"}
+          </span>
         </li>
       ))}
     </ul>
+  );
+}
+
+function SectionLabel({
+  children,
+  action,
+}: {
+  children: React.ReactNode;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between px-2.5 pb-1 pt-3">
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-ink-400">
+        {children}
+      </span>
+      {action}
+    </div>
   );
 }
 
@@ -90,16 +124,17 @@ export default function GuildChannelsBar() {
   }, [rosters, fetchUsers]);
 
   return (
-    <div className="w-1/6 bg-gray-900 text-white flex flex-col px-2 py-4 gap-4">
-      <h1 className="text-lg text-white font-bold flex-shrink-0 text-center">
-        {guild?.name}
-      </h1>
+    <SidePanel label="Channels">
+      <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-white/[0.06] px-4">
+        <Avatar name={guild?.name} seed={guild?.id ?? ""} size="sm" />
+        <h2 className="truncate text-[15px] font-semibold text-white">
+          {guild?.name ?? "Guild"}
+        </h2>
+      </div>
 
-      <div className="w-full h-full flex flex-col gap-4 overflow-y-auto">
-        <div className="flex flex-col gap-2">
-          <h2 className="text-xs uppercase tracking-wide text-gray-400 px-1">
-            Text channels
-          </h2>
+      <div className="flex-1 overflow-y-auto px-2 pb-3">
+        <SectionLabel>Text channels</SectionLabel>
+        <div className="space-y-0.5">
           {textChannels.map((channel) => (
             <ChannelLink
               key={channel.id}
@@ -110,12 +145,10 @@ export default function GuildChannelsBar() {
           ))}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <h2 className="text-xs uppercase tracking-wide text-gray-400 px-1">
-            Voice channels
-          </h2>
+        <SectionLabel>Voice channels</SectionLabel>
+        <div className="space-y-0.5">
           {voiceChannels.map((channel) => (
-            <div key={channel.id} className="flex flex-col gap-1">
+            <div key={channel.id}>
               <ChannelLink
                 channel={channel}
                 guildId={guildId!}
@@ -127,23 +160,25 @@ export default function GuildChannelsBar() {
         </div>
       </div>
 
-      {/* In the channel bar rather than the members panel so it is reachable
-          with no channel selected — otherwise a fresh guild has no way in. */}
-      <button
-        className="text-sm px-2 py-2 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors"
-        onClick={() => setInviteModalGuildId(guildId ?? null)}
-      >
-        + Invite people
-      </button>
-
-      {isOwner && (
+      <div className="shrink-0 space-y-1 border-t border-white/[0.06] p-2">
+        {/* In the channel bar rather than the members panel so it is reachable
+            with no channel selected — otherwise a fresh guild has no way in. */}
         <button
-          className="text-sm px-2 py-2 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors"
-          onClick={() => setChannelModalGuildId(guildId ?? null)}
+          className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-ink-300 transition-colors hover:bg-white/[0.05] hover:text-white"
+          onClick={() => setInviteModalGuildId(guildId ?? null)}
         >
-          + Create channel
+          <FiUserPlus size={14} /> Invite people
         </button>
-      )}
-    </div>
+
+        {isOwner && (
+          <button
+            className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-ink-300 transition-colors hover:bg-white/[0.05] hover:text-white"
+            onClick={() => setChannelModalGuildId(guildId ?? null)}
+          >
+            <FiPlus size={14} /> Create channel
+          </button>
+        )}
+      </div>
+    </SidePanel>
   );
 }

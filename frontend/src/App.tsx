@@ -23,12 +23,16 @@ import GuildInviteInboxModal from "./guild/GuildInviteInboxModal";
 
 function MainLayout() {
   return (
-    <div className="flex h-screen bg-gray-800">
+    <div className="flex h-[100dvh] overflow-hidden bg-ink-950 text-ink-100">
       <AppInitializer />
       <WebSocketProvider>
         <Sidebar />
 
-        <Outlet />
+        {/* The rail is a fixed bottom bar below `lg`, so it is out of flow and
+            the content needs its own room at the bottom. */}
+        <div className="flex min-w-0 flex-1 pb-16 lg:pb-0">
+          <Outlet />
+        </div>
 
         {/* Single mount point: every modal is driven by store state, so any
             component can open one without mounting its own copy. */}
@@ -67,10 +71,12 @@ export default function App() {
                 <Route
                   index
                   element={
-                    <EmptyState
-                      title="No channel selected"
-                      hint="Pick a channel on the left to start talking."
-                    />
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      <EmptyState
+                        title="No channel selected"
+                        hint="Pick a channel on the left to start talking."
+                      />
+                    </div>
                   }
                 />
                 <Route

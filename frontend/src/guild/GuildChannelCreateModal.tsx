@@ -1,10 +1,29 @@
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FiHash, FiVolume2 } from "react-icons/fi";
 import Modal from "../shared/Modal";
+import { Button } from "../shared/Button";
+import { Input } from "../shared/Input";
+import { errorText } from "../shared/errors";
 import { useGuildStore } from "./guildStore";
 import { useChannelStore } from "../shared/channelStore";
 import { ChannelType } from "../shared/types";
 import { postCreateGuildChannel } from "./apiClient";
+
+const OPTIONS = [
+  {
+    type: ChannelType.GUILD_TEXT,
+    label: "Text",
+    hint: "Messages and history",
+    Icon: FiHash,
+  },
+  {
+    type: ChannelType.GUILD_VOICE,
+    label: "Voice",
+    hint: "Live audio on the SFU",
+    Icon: FiVolume2,
+  },
+];
 
 export default function GuildChannelCreateModal() {
   const { channelModalGuildId, setChannelModalGuildId } = useGuildStore();
@@ -37,8 +56,8 @@ export default function GuildChannelCreateModal() {
       const guildId = channelModalGuildId;
       handleClose();
       navigate(`/guild/${guildId}/channel/${res.data.id}`);
-    } catch {
-      setError("Could not create that channel");
+    } catch (err) {
+      setError(errorText(err, "Could not create that channel."));
       setIsLoading(false);
     }
   };
@@ -47,63 +66,55 @@ export default function GuildChannelCreateModal() {
     <Modal
       isOpen={!!channelModalGuildId}
       onClose={handleClose}
-      title="Create Channel"
+      title="Create a channel"
     >
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label
-            htmlFor="channel-name"
-            className="block text-sm font-medium text-gray-300 mb-2"
-          >
-            Channel Name *
-          </label>
-          <input
-            id="channel-name"
-            ref={nameRef}
-            type="text"
-            placeholder="new-channel"
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            required
-            disabled={isLoading}
-          />
-        </div>
-
-        <div className="flex gap-3">
-          {[ChannelType.GUILD_TEXT, ChannelType.GUILD_VOICE].map((option) => (
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <div className="grid grid-cols-2 gap-2.5">
+          {OPTIONS.map((option) => (
             <button
-              key={option}
+              key={option.type}
               type="button"
-              onClick={() => setType(option)}
-              className={`flex-1 px-4 py-2 rounded-md transition-colors ${
-                type === option
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-              }`}
+              onClick={() => setType(option.type)}
               disabled={isLoading}
+              className={`flex flex-col items-start gap-1 rounded-xl border p-3.5 text-left transition-all ${
+                type === option.type
+                  ? "border-rain-400/40 bg-rain-400/[0.08] text-white"
+                  : "border-white/[0.07] bg-white/[0.02] text-ink-300 hover:border-white/15"
+              }`}
             >
-              {option === ChannelType.GUILD_TEXT ? "💬 Text" : "🔊 Voice"}
+              <option.Icon
+                size={17}
+                className={type === option.type ? "text-rain-300" : ""}
+              />
+              <span className="text-sm font-medium">{option.label}</span>
+              <span className="text-[11px] text-ink-400">{option.hint}</span>
             </button>
           ))}
         </div>
 
-        {error && <p className="text-red-500">{error}</p>}
+        <Input
+          label="Channel name"
+          name="channel-name"
+          ref={nameRef}
+          placeholder="new-channel"
+          required
+          disabled={isLoading}
+          autoFocus
+        />
 
-        <div className="flex gap-3 pt-4">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="flex-1 px-4 py-2 text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
-            disabled={isLoading}
-          >
+        {error && (
+          <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">
+            {error}
+          </p>
+        )}
+
+        <div className="flex gap-3">
+          <Button type="button" onClick={handleClose} disabled={isLoading} full>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md transition-colors"
-          >
-            {isLoading ? "Creating..." : "Create Channel"}
-          </button>
+          </Button>
+          <Button type="submit" variant="primary" loading={isLoading} full>
+            {isLoading ? "Creating…" : "Create channel"}
+          </Button>
         </div>
       </form>
     </Modal>

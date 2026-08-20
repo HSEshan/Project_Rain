@@ -1,8 +1,13 @@
 # Project Rain
 
+**Live demo:** https://voice.eshanhs.dev
+
 A self-hosted chat platform in the shape of Discord: direct messages, friends,
 guilds with text and voice channels, and a realtime event pipeline built to
 survive more than one gateway instance.
+
+Voice runs on a self-hosted LiveKit SFU and has been tested between two people
+in different states for a two-hour session.
 
 ## Architecture
 

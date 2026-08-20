@@ -1,28 +1,26 @@
+import { useState } from "react";
+import { FiCheck, FiUserPlus, FiX } from "react-icons/fi";
 import { useFriendStore } from "./friendStore";
 import { useUserStore } from "../shared/userStore";
 import { useChannelStore } from "../shared/channelStore";
-import { useState } from "react";
 import { acceptFriendRequest, rejectFriendRequest } from "./apiClient";
+import { errorText } from "../shared/errors";
+import Avatar from "../shared/Avatar";
+import EmptyState from "../shared/EmptyState";
 
 export default function FriendRequestList() {
   const { friendRequests, removeFriendRequest, fetchFriends } = useFriendStore();
   const { getUser: getUserFromStore, fetchUsers } = useUserStore();
   const { fetchUserChannels, setParticipants } = useChannelStore();
-  const [response, setResponse] = useState<string>("");
-
-  const namedFriendRequests = friendRequests.map((friendRequest) => {
-    return {
-      id: friendRequest.id,
-      from_user_name:
-        getUserFromStore(friendRequest.from_user_id)?.username ?? "Loading...",
-    };
-  });
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
   const handleAccept = async (id: string) => {
+    setBusy(id);
+    setError("");
     try {
       const res = await acceptFriendRequest(id);
       removeFriendRequest(id);
-      setResponse("Friend request accepted");
 
       // The new DM has to show up without a page reload
       const { friend_id, dm_channel_id } = res.data;
@@ -30,53 +28,79 @@ export default function FriendRequestList() {
       setParticipants(dm_channel_id, [friend_id]);
       await fetchUsers([friend_id]);
       await fetchFriends();
-    } catch (error) {
-      console.error(error);
-      setResponse("Could not accept that friend request");
+    } catch (err) {
+      setError(errorText(err, "Could not accept that request."));
+    } finally {
+      setBusy(null);
     }
   };
 
   const handleReject = async (id: string) => {
+    setBusy(id);
+    setError("");
     try {
       await rejectFriendRequest(id);
       removeFriendRequest(id);
-      setResponse("Friend request rejected");
-    } catch (error) {
-      console.error(error);
-      setResponse("Could not reject that friend request");
+    } catch (err) {
+      setError(errorText(err, "Could not reject that request."));
+    } finally {
+      setBusy(null);
     }
   };
 
+  if (friendRequests.length === 0) {
+    return (
+      <EmptyState
+        icon={<FiUserPlus size={22} />}
+        title="No incoming requests"
+        hint="When someone adds you, their request lands here in real time."
+      />
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-2">
-      {response && <p className="text-center text-sm">{response}</p>}
-      {namedFriendRequests.length === 0 && (
-        <p className="text-center text-sm text-gray-400">
-          No pending friend requests
+    <div className="space-y-1.5">
+      {error && (
+        <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">
+          {error}
         </p>
       )}
-      {namedFriendRequests.map((friendRequest) => (
-        <div
-          key={friendRequest.id}
-          className="flex flex-row gap-2  overflow-y-auto h-full"
-        >
-          <div className="text-sm px-2 py-2 bg-gray-800 rounded-md w-full">
-            {friendRequest.from_user_name}
+      {friendRequests.map((request) => {
+        const name =
+          getUserFromStore(request.from_user_id)?.username ?? "…";
+        return (
+          <div
+            key={request.id}
+            className="flex items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 py-3"
+          >
+            <Avatar name={name} seed={request.from_user_id} />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate font-medium text-ink-100">
+                {name}
+              </span>
+              <span className="text-xs text-ink-500">
+                Sent you a friend request
+              </span>
+            </span>
+            <button
+              onClick={() => void handleAccept(request.id)}
+              disabled={busy !== null}
+              aria-label={`Accept request from ${name}`}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-300 transition-colors hover:bg-emerald-500/25 disabled:opacity-40"
+            >
+              <FiCheck size={16} />
+            </button>
+            <button
+              onClick={() => void handleReject(request.id)}
+              disabled={busy !== null}
+              aria-label={`Reject request from ${name}`}
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/[0.06] text-ink-300 transition-colors hover:bg-red-500/20 hover:text-red-300 disabled:opacity-40"
+            >
+              <FiX size={16} />
+            </button>
           </div>
-          <button
-            className="text-sm px-2 py-2 bg-gray-800 rounded-md align-right"
-            onClick={() => handleAccept(friendRequest.id)}
-          >
-            Accept
-          </button>
-          <button
-            className="text-sm px-2 py-2 bg-red-500 rounded-md align-right"
-            onClick={() => handleReject(friendRequest.id)}
-          >
-            Reject
-          </button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

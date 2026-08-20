@@ -155,6 +155,13 @@ export default function Aurora(props: AuroraProps) {
       }
     }
     window.addEventListener("resize", resize);
+    // The window listener alone is not enough: when this canvas is positioned
+    // inside a container that has no width yet at effect time, the first
+    // measurement is 0 and nothing ever re-measures it. Observing the
+    // container catches that first layout, and any later size change that is
+    // not a window resize.
+    const observer = new ResizeObserver(() => resize());
+    observer.observe(ctn);
 
     const geometry = new Triangle(gl);
     if (geometry.attributes.uv) {
@@ -204,6 +211,7 @@ export default function Aurora(props: AuroraProps) {
     return () => {
       cancelAnimationFrame(animateId);
       window.removeEventListener("resize", resize);
+      observer.disconnect();
       if (ctn && gl.canvas.parentNode === ctn) {
         ctn.removeChild(gl.canvas);
       }

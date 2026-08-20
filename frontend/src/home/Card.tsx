@@ -1,25 +1,34 @@
+import Badge from "../shared/Badge";
+
 interface CardProps {
   title: string;
-  image: React.ReactNode;
+  body?: string;
+  icon: React.ReactNode;
   onClick: () => void;
   /** Rendered as a count bubble; hidden when zero or undefined. */
   badge?: number;
 }
 
-export default function Card({ title, image, onClick, badge }: CardProps) {
+export default function Card({ title, body, icon, onClick, badge }: CardProps) {
   return (
-    <div
-      className="relative w-60 h-72 text-white rounded-md p-4 flex flex-col items-center
-      justify-center gap-4 border-2 border-white cursor-pointer hover:border-blue-500 transition-all duration-300"
+    <button
       onClick={onClick}
+      className="group relative flex items-start gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-5 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-rain-400/30 hover:bg-white/[0.05]"
     >
-      {!!badge && (
-        <span className="absolute top-3 right-3 min-w-6 h-6 px-2 flex items-center justify-center text-sm font-bold bg-red-500 rounded-full">
-          {badge}
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-gradient-to-br from-rain-400/20 to-iris-400/10 text-rain-300 transition-colors group-hover:text-rain-200">
+        {icon}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="flex items-center gap-2">
+          <span className="font-semibold text-white">{title}</span>
+          <Badge count={badge} />
         </span>
-      )}
-      <h1 className="text-2xl text-white font-bold">{title}</h1>
-      {image}
-    </div>
+        {body && (
+          <span className="mt-1 block text-sm leading-relaxed text-ink-400">
+            {body}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }

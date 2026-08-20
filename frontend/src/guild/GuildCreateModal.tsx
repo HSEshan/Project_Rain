@@ -1,9 +1,12 @@
 import { useState, useRef } from "react";
+import type { AxiosResponse } from "axios";
 import { useGuildStore } from "./guildStore";
 import { useChannelStore } from "../shared/channelStore";
 import Modal from "../shared/Modal";
+import { Button } from "../shared/Button";
+import { Input, Textarea } from "../shared/Input";
+import { errorText } from "../shared/errors";
 import { postCreateGuild } from "./apiClient";
-import type { AxiosResponse } from "axios";
 
 export default function GuildCreateModal() {
   const { modalOpen, setModalOpen, addGuild } = useGuildStore();
@@ -18,6 +21,7 @@ export default function GuildCreateModal() {
     if (!guildNameRef.current?.value.trim()) return;
 
     setIsLoading(true);
+    setError("");
     await postCreateGuild({
       name: guildNameRef.current?.value || "",
       description: guildDescriptionRef.current?.value || "",
@@ -28,74 +32,57 @@ export default function GuildCreateModal() {
         await fetchUserChannels();
         setModalOpen(false);
       })
-      .catch((err: Error) => {
-        setError(err.message);
+      .catch((err: unknown) => {
+        setError(errorText(err, "Could not create that guild."));
       })
-      .finally(() => {
-        setIsLoading(false);
-      });
+      .finally(() => setIsLoading(false));
   };
 
   const handleClose = () => {
     setModalOpen(false);
+    setError("");
     setIsLoading(false);
   };
 
   return (
-    <Modal isOpen={modalOpen} onClose={handleClose} title="Create Guild">
+    <Modal
+      isOpen={modalOpen}
+      onClose={handleClose}
+      title="Create a guild"
+      description="You will get a text and a voice channel to start with."
+    >
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label
-            htmlFor="guild-name"
-            className="block text-sm font-medium text-gray-300 mb-2"
-          >
-            Guild Name *
-          </label>
-          <input
-            id="guild-name"
-            ref={guildNameRef}
-            type="text"
-            placeholder="Enter guild name"
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            required
-            disabled={isLoading}
-          />
-        </div>
+        <Input
+          label="Guild name"
+          name="guild-name"
+          ref={guildNameRef}
+          placeholder="Weekend Raiders"
+          required
+          disabled={isLoading}
+          autoFocus
+        />
+        <Textarea
+          label="Description (optional)"
+          name="guild-description"
+          ref={guildDescriptionRef}
+          placeholder="What is this guild for?"
+          rows={3}
+          disabled={isLoading}
+        />
 
-        <div>
-          <label
-            htmlFor="guild-description"
-            className="block text-sm font-medium text-gray-300 mb-2"
-          >
-            Description (Optional)
-          </label>
-          <textarea
-            id="guild-description"
-            ref={guildDescriptionRef}
-            placeholder="Enter guild description"
-            rows={3}
-            className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-            disabled={isLoading}
-          />
-        </div>
-        {error && <p className="text-red-500">{error}</p>}
+        {error && (
+          <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">
+            {error}
+          </p>
+        )}
 
-        <div className="flex gap-3 pt-4">
-          <button
-            type="button"
-            onClick={handleClose}
-            className="flex-1 px-4 py-2 text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-md transition-colors"
-            disabled={isLoading}
-          >
+        <div className="flex gap-3 pt-1">
+          <Button type="button" onClick={handleClose} disabled={isLoading} full>
             Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md transition-colors"
-          >
-            {isLoading ? "Creating..." : "Create Guild"}
-          </button>
+          </Button>
+          <Button type="submit" variant="primary" loading={isLoading} full>
+            {isLoading ? "Creating…" : "Create guild"}
+          </Button>
         </div>
       </form>
     </Modal>

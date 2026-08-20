@@ -1,7 +1,13 @@
 # Host Nginx vhost — the public entrypoint in production.
 #
-# Copy to /etc/nginx/sites-available/rain, replace every YOURDOMAIN, symlink
-# into sites-enabled, `nginx -t && systemctl reload nginx`.
+# Copy to /etc/nginx/sites-available/rain, then replace YOURDOMAIN — it appears
+# FOUR times: two server_name lines and two ssl_certificate paths. Missing the
+# cert paths is the easy mistake, because the config only fails on the second
+# server block. Use sed rather than an editor:
+#
+#   sudo sed -i 's/YOURDOMAIN/rain.example.com/g' /etc/nginx/sites-available/rain
+#
+# Then symlink into sites-enabled and `nginx -t && systemctl reload nginx`.
 #
 # Nginx terminates TLS and hands everything to the app's Caddy edge on
 # 127.0.0.1:8081, which does the routing (/api, /ws, /livekit, SPA). One
@@ -35,13 +41,34 @@ server {
 server {
     listen 443 ssl;
     listen [::]:443 ssl;
-    http2 on;
     server_name YOURDOMAIN;
+
+    # HTTP/2 is deliberately not set here. The syntax is version-specific and
+    # getting it wrong is a hard config error, not a warning:
+    #   nginx >= 1.25.1  ->  `http2 on;` as a directive in this block
+    #   nginx <  1.25.1  ->  `http2` as a listen parameter: `listen 443 ssl http2;`
+    # (Ubuntu 24.04 ships 1.24 — check with `nginx -v`.)
+    # On the older syntax it is a property of the listening socket anyway, so if
+    # another vhost on this box already enabled it for :443, this one gets it.
 
     ssl_certificate     /etc/letsencrypt/live/YOURDOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/YOURDOMAIN/privkey.pem;
-    include /etc/letsencrypt/options-ssl-nginx.conf;
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+
+    # TLS settings are inline rather than `include
+    # /etc/letsencrypt/options-ssl-nginx.conf` + `ssl_dhparam ssl-dhparams.pem`.
+    # Certbot only writes those two files when its *nginx installer* configures
+    # a vhost; we issue with `certonly --webroot`, so on a fresh box they do not
+    # exist and nginx fails to start. This is equivalent, and self-contained.
+    #
+    # No ssl_dhparam is needed because the cipher list is ECDHE-only.
+    # The session cache zone name must be unique per vhost on this box — same
+    # class of collision as the `map` variable above.
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;
+    ssl_session_cache shared:RainSSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
 
     # Chat is websockets; a small upload cap is still worth having.
     client_max_body_size 10m;

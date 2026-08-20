@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { FiMail } from "react-icons/fi";
 import { useGuildStore } from "./guildStore";
 import type { GuildInvite } from "./apiClient";
+import Avatar from "../shared/Avatar";
+import { Button } from "../shared/Button";
+import { errorText } from "../shared/errors";
 
 /** Days left before an invite expires, floored at 0. */
 function expiresIn(invite: GuildInvite): string {
@@ -36,10 +40,7 @@ export default function GuildInviteList({
 
   if (invites.length === 0) return <>{emptyState ?? null}</>;
 
-  const respond = async (
-    inviteId: string,
-    accepted: boolean
-  ): Promise<void> => {
+  const respond = async (inviteId: string, accepted: boolean) => {
     const invite = invites.find((i) => i.invite_id === inviteId);
     if (!invite) return;
     setBusy(inviteId);
@@ -52,11 +53,14 @@ export default function GuildInviteList({
       } else {
         await declineInvite(invite);
       }
-    } catch {
+    } catch (err) {
       setError(
-        accepted
-          ? `Could not join ${invite.guild_name}. The invite may have expired.`
-          : `Could not decline the invitation to ${invite.guild_name}.`
+        errorText(
+          err,
+          accepted
+            ? `Could not join ${invite.guild_name}. The invite may have expired.`
+            : `Could not decline the invitation to ${invite.guild_name}.`
+        )
       );
     } finally {
       setBusy(null);
@@ -64,47 +68,58 @@ export default function GuildInviteList({
   };
 
   return (
-    <div className="w-full max-w-md flex flex-col gap-2">
-      <h2 className="text-xs uppercase tracking-wide text-gray-400">
-        Invitations — {invites.length}
+    <div className="space-y-2">
+      <h2 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-ink-400">
+        <FiMail size={13} /> Invitations ({invites.length})
       </h2>
-      <ul className="flex flex-col gap-2">
+
+      <ul className="space-y-2">
         {invites.map((invite) => (
           <li
             key={invite.invite_id}
-            className="flex items-center justify-between gap-3 bg-gray-900 rounded-md px-3 py-2"
+            className="gradient-border flex items-center gap-3 rounded-2xl bg-gradient-to-r from-rain-400/[0.06] to-transparent p-3.5"
           >
-            <div className="min-w-0">
-              <p className="text-sm text-white truncate">{invite.guild_name}</p>
-              <p className="text-xs text-gray-400 truncate">
+            <Avatar name={invite.guild_name} seed={invite.guild_id} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate font-medium text-white">
+                {invite.guild_name}
+              </p>
+              <p className="truncate text-xs text-ink-400">
                 {invite.inviter_username
                   ? `Invited by ${invite.inviter_username}`
                   : "Invitation"}
+                {" · "}
+                {expiresIn(invite)}
               </p>
-              <p className="text-xs text-gray-500">{expiresIn(invite)}</p>
             </div>
-            <div className="flex gap-2 flex-shrink-0">
-              <button
-                type="button"
+            <div className="flex shrink-0 gap-2">
+              <Button
+                size="sm"
+                variant="primary"
+                loading={busy === invite.invite_id}
                 disabled={busy !== null}
                 onClick={() => void respond(invite.invite_id, true)}
-                className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white rounded transition-colors"
               >
-                {busy === invite.invite_id ? "…" : "Accept"}
-              </button>
-              <button
-                type="button"
+                Accept
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
                 disabled={busy !== null}
                 onClick={() => void respond(invite.invite_id, false)}
-                className="text-xs px-3 py-1 bg-gray-700 hover:bg-red-600 disabled:bg-gray-600 text-white rounded transition-colors"
               >
                 Decline
-              </button>
+              </Button>
             </div>
           </li>
         ))}
       </ul>
-      {error && <p className="text-sm text-red-400">{error}</p>}
+
+      {error && (
+        <p className="rounded-xl border border-red-500/25 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-300">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -1,3 +1,115 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+    /* Used by the gradient text/border utilities below so the accent pair is
+       defined once rather than repeated at every call site. */
+    --grad-from: theme("colors.rain.300");
+    --grad-via: theme("colors.rain.400");
+    --grad-to: theme("colors.iris.400");
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-ink-950 text-ink-100 font-sans antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Headings carry the display treatment everywhere, so no component has to
+     remember the tracking. */
+  h1, h2, h3 {
+    @apply tracking-tightest;
+  }
+
+  ::selection {
+    @apply bg-rain-400/30 text-white;
+  }
+
+  /* One focus style for the whole app. Visible for keyboards, invisible for
+     mouse users, never removed outright. */
+  :focus-visible {
+    @apply outline-none ring-2 ring-rain-400/70 ring-offset-2 ring-offset-ink-950;
+  }
+
+  /* Firefox; the webkit rules below cover the rest. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme("colors.ink.600") transparent;
+  }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full border-[3px] border-solid border-transparent bg-ink-600 bg-clip-content;
+  }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-ink-500 bg-clip-content; }
+}
+
+@layer components {
+  /* Frosted panel. The inset highlight is what stops large dark surfaces from
+     reading as flat rectangles. */
+  .glass {
+    @apply border border-white/[0.07] bg-white/[0.03] backdrop-blur-xl;
+    box-shadow: theme("boxShadow.panel");
+  }
+
+  .gradient-text {
+    background-image: linear-gradient(
+      100deg,
+      var(--grad-from),
+      var(--grad-via) 45%,
+      var(--grad-to)
+    );
+    @apply bg-clip-text text-transparent;
+  }
+
+  /* Gradient hairline border without a wrapper element. */
+  .gradient-border {
+    position: relative;
+  }
+  .gradient-border::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      135deg,
+      rgba(34, 211, 238, 0.5),
+      rgba(129, 140, 248, 0.25) 45%,
+      transparent 70%
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+}
+
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+
+  /* Staggered reveals: set the delay in markup without a style attribute. */
+  .delay-70 { animation-delay: 70ms; }
+  .delay-140 { animation-delay: 140ms; }
+  .delay-210 { animation-delay: 210ms; }
+  .delay-280 { animation-delay: 280ms; }
+  .delay-350 { animation-delay: 350ms; }
+}
+
+/* Respect the OS setting. Everything still renders, it just stops moving. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
