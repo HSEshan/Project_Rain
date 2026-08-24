@@ -4,6 +4,7 @@ import { useUserStore } from "./userStore";
 import { useGuildStore } from "../guild/guildStore";
 import { useFriendStore } from "../friends/friendStore";
 import { useVoiceStore } from "../voice/voiceStore";
+import { useTourStore } from "../tour/tourStore";
 
 /**
  * Drop every piece of per-account state. Call this on logout so the next
@@ -17,4 +18,6 @@ export function resetAllStores() {
   useFriendStore.getState().reset();
   // Also disconnects the SFU room — signing out must not leave a live mic
   useVoiceStore.getState().reset();
+  // A tour left running would spotlight the login screen
+  useTourStore.getState().end();
 }

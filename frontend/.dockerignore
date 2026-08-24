@@ -12,6 +12,11 @@ env/
 
 # env files
 *.env
+# ...except the Vite one. Its values are public by definition (Vite inlines
+# every VITE_* key into the client bundle) and Dockerfile.prod needs it in the
+# build context, because `npm run build` is when they get baked in.
+!.env
+!.env.example
 
 # Editor directories and project files
 .vscode/

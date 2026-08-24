@@ -38,6 +38,19 @@ async def startup_event():
     # Best effort: a missing Redis degrades realtime updates, it does not stop
     # the API from serving
     await realtime_publisher.connect()
+
+    # After migrations, so the tables exist, and after Redis, so the reset can
+    # invalidate the gateway's cached membership. Failing to seed the demo must
+    # not stop the API from serving real accounts.
+    if settings.DEMO_ENABLED:
+        from src.database.core import AsyncSessionLocal
+        from src.demo.seed import seed_demo
+
+        try:
+            await seed_demo(AsyncSessionLocal)
+        except Exception:
+            logger.exception("Demo seeding failed, continuing without it")
+
     logger.info("Startup Successful")
 
 

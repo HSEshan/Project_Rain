@@ -34,6 +34,11 @@ class SettingsFactory(BaseSettings):
     REDIS_DB: int = 0
     NUM_SHARDS: int = 16
 
+    # Demo account. Off by default so a fresh or private deployment does not
+    # silently expose a tokenless login route; the seeder only runs when this
+    # is on. See src/demo/.
+    DEMO_ENABLED: bool = False
+
     # Voice (LiveKit SFU). The key/secret pair must match the one the livekit
     # container is started with — rest_api mints the join tokens. Defaulted so
     # that an env file written before voice existed still boots; the voice

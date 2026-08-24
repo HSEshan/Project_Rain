@@ -20,6 +20,7 @@ import GuildCreateModal from "./guild/GuildCreateModal";
 import GuildChannelCreateModal from "./guild/GuildChannelCreateModal";
 import GuildInviteModal from "./guild/GuildInviteModal";
 import GuildInviteInboxModal from "./guild/GuildInviteInboxModal";
+import TourOverlay from "./tour/TourOverlay";
 
 function MainLayout() {
   return (
@@ -41,6 +42,10 @@ function MainLayout() {
         <GuildChannelCreateModal />
         <GuildInviteModal />
         <GuildInviteInboxModal />
+
+        {/* Above the modals: it spotlights the app chrome, so it has to be
+            able to dim anything that is already open. */}
+        <TourOverlay />
       </WebSocketProvider>
     </div>
   );

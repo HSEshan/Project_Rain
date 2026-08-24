@@ -31,6 +31,12 @@ export interface ButtonProps
   size?: Size;
   /** Renders a react-router Link styled as a button. */
   to?: string;
+  /**
+   * Renders an external anchor styled as a button, opened in a new tab.
+   * Use this rather than `to` for anything outside the SPA — the router would
+   * try to resolve an absolute URL as a route.
+   */
+  href?: string;
   loading?: boolean;
   icon?: React.ReactNode;
   full?: boolean;
@@ -46,6 +52,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       variant = "secondary",
       size = "md",
       to,
+      href,
       loading,
       icon,
       full,
@@ -76,6 +83,21 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         <span className="relative">{children}</span>
       </>
     );
+
+    if (href) {
+      return (
+        // noreferrer as well as noopener: the target should not learn which
+        // page sent it, and old browsers only honour the pair together.
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer noopener"
+          className={classes}
+        >
+          {inner}
+        </a>
+      );
+    }
 
     if (to) {
       return (

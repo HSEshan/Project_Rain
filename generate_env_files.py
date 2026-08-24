@@ -37,6 +37,7 @@ BCRYPT_ROUNDS=10
 SUPERUSER_EMAIL=superuser@admin.com
 SUPERUSER_PASSWORD={superuser_password.strip()}
 DOCS=true
+DEMO_ENABLED=true
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_DB=0
@@ -107,6 +108,7 @@ REDIS_DB=0
 NUM_STREAMS=2
             """.strip()
         )
+    write_frontend_env()
     with open("postgres.dev.env", "w") as f:
         f.write(
             f"""
@@ -118,6 +120,39 @@ POSTGRES_PASSWORD={postgres_password.strip()}
 POSTGRES_DB=devdb
             """.strip()
         )
+
+
+DEFAULT_GIT_REPO_URL = "https://github.com/HSEshan/Project_Rain"
+
+
+def write_frontend_env(path: str = "frontend/.env") -> None:
+    """Write the Vite env for the landing page's outbound links.
+
+    One file for dev and prod: the dev server reads it live, and
+    Dockerfile.prod copies it in before `npm run build`, which is when Vite
+    inlines `import.meta.env.VITE_*` into the bundle. Only VITE_-prefixed keys
+    reach the browser, and everything here is public anyway.
+
+    An existing file is left alone, so a customised repo URL survives
+    regenerating the backend secrets.
+    """
+    if os.path.exists(path):
+        print(f"kept existing {path}")
+        return
+
+    repo_url = os.getenv("GIT_REPO_URL", DEFAULT_GIT_REPO_URL)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write(
+            f"""# Public links shown on the landing page. Safe to expose: Vite inlines
+# every VITE_* value into the client bundle.
+VITE_GIT_REPO_URL={repo_url}
+# Swagger UI. rest_api runs with root_path=/api, so its /docs is reachable at
+# /api/docs through Caddy. Requires DOCS=true in the rest_api env.
+VITE_API_DOCS_PATH=/api/docs
+"""
+        )
+    print(f"wrote {path}")
 
 
 def main_prod():
@@ -151,7 +186,8 @@ ALGORITHM=HS256
 BCRYPT_ROUNDS=12
 SUPERUSER_EMAIL=superuser@admin.com
 SUPERUSER_PASSWORD={superuser_password}
-DOCS=false
+DOCS=true
+DEMO_ENABLED=true
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_DB=0
@@ -200,6 +236,8 @@ POSTGRES_DB=raindb""",
         with open(name, "w") as f:
             f.write(body.strip() + "\n")
         print(f"wrote {name}")
+
+    write_frontend_env()
 
     print(
         "\nNUM_SHARDS (ws_gateway) and NUM_STREAMS (consumer, lease manager) "

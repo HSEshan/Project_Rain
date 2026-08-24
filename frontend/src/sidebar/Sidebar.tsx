@@ -35,6 +35,7 @@ export function Sidebar() {
     {
       to: "/home",
       label: "Home",
+      tourId: "nav-home",
       icon: <FiHome size={19} />,
       active: location.pathname.startsWith("/home"),
       badge: 0,
@@ -42,6 +43,7 @@ export function Sidebar() {
     {
       to: "/dm",
       label: "Messages",
+      tourId: "nav-messages",
       icon: <FiMessageCircle size={19} />,
       active: location.pathname.startsWith("/dm"),
       badge: friendRequests.length,
@@ -49,6 +51,7 @@ export function Sidebar() {
     {
       to: "/guild",
       label: "Guilds",
+      tourId: "nav-guilds",
       icon: <FiUsers size={19} />,
       active: location.pathname.startsWith("/guild"),
       badge: invites.length,
@@ -71,6 +74,7 @@ export function Sidebar() {
           label={destination.label}
           active={destination.active}
           badge={destination.badge}
+          tourId={destination.tourId}
         >
           {destination.icon}
         </SideBarButton>

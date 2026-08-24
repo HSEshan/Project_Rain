@@ -124,7 +124,7 @@ export default function GuildChannelsBar() {
   }, [rosters, fetchUsers]);
 
   return (
-    <SidePanel label="Channels">
+    <SidePanel label="Channels" tourId="guild-channels">
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-white/[0.06] px-4">
         <Avatar name={guild?.name} seed={guild?.id ?? ""} size="sm" />
         <h2 className="truncate text-[15px] font-semibold text-white">

@@ -26,6 +26,11 @@ def read_root():
 
 
 def create_app() -> FastAPI:
+    # The docs flag has to be passed to the constructor. FastAPI registers the
+    # /docs, /redoc and /openapi.json routes during __init__, so assigning
+    # app.docs_url = None afterwards left every one of them serving — DOCS=false
+    # looked like it worked and disabled nothing.
+    docs = settings.DOCS
     app = FastAPI(
         lifespan=lifespan,
         log_level="debug",
@@ -33,6 +38,9 @@ def create_app() -> FastAPI:
         description="API for Project Rain",
         version="0.5.0",
         root_path="/api",
+        docs_url="/docs" if docs else None,
+        redoc_url="/redoc" if docs else None,
+        openapi_url="/openapi.json" if docs else None,
     )
     app.include_router(health_router)
     app.include_router(master_router)
@@ -43,8 +51,4 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    if not settings.DOCS:
-        app.docs_url = None
-        app.redoc_url = None
-        app.openapi_url = None
     return app

@@ -13,9 +13,12 @@ import { useUiStore } from "./uiStore";
 export default function SidePanel({
   children,
   label,
+  tourId,
 }: {
   children: React.ReactNode;
   label: string;
+  /** Anchors a tour step to the panel. See src/tour/steps.ts. */
+  tourId?: string;
 }) {
   const { panelOpen, setPanelOpen } = useUiStore();
   const { pathname } = useLocation();
@@ -43,6 +46,7 @@ export default function SidePanel({
 
       <aside
         aria-label={label}
+        data-tour={tourId}
         className={`fixed inset-y-0 left-0 z-40 flex w-[17rem] shrink-0 flex-col border-r border-white/[0.06] bg-ink-900 transition-transform duration-300 ease-out lg:static lg:z-auto lg:w-64 lg:translate-x-0 lg:bg-ink-900/60 ${
           panelOpen ? "translate-x-0" : "-translate-x-full"
         }`}

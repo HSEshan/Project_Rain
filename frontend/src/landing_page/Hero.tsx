@@ -1,5 +1,7 @@
-import { FiArrowRight, FiGithub } from "react-icons/fi";
+import { FiArrowRight, FiBookOpen, FiGithub } from "react-icons/fi";
 import { Button } from "../shared/Button";
+import DemoLoginButton from "../demo/DemoLoginButton";
+import { API_DOCS_URL, GIT_REPO_URL } from "../shared/links";
 import Aurora from "./Aurora";
 import AppPreview from "./AppPreview";
 import TechStack from "./TechStack";
@@ -42,22 +44,48 @@ export default function Hero() {
             portfolio project to work through realtime architecture end to end.
           </p>
 
-          <div className="mt-9 flex animate-fade-up flex-col items-center justify-center gap-3 delay-210 sm:flex-row">
+          <div className="mt-9 flex animate-fade-up flex-col items-center justify-center gap-3 delay-210 sm:flex-row sm:flex-wrap">
             <Button to="/login" variant="primary" size="lg" icon={<FiArrowRight />}>
               Start talking
             </Button>
+            {/* Both leave the app, so they are anchors rather than routes */}
             <Button
+              href={API_DOCS_URL}
+              variant="secondary"
+              size="lg"
+              icon={<FiBookOpen />}
+            >
+              OpenAPI Docs
+            </Button>
+            <Button
+              href={GIT_REPO_URL}
               variant="secondary"
               size="lg"
               icon={<FiGithub />}
+            >
+              Git
+            </Button>
+          </div>
+
+          {/* The demo gets its own row: it needs the caveat next to it, and
+              putting that inside the CTA row would break the line up. */}
+          <div className="mt-6 flex animate-fade-up flex-col items-center gap-2.5 delay-280">
+            <DemoLoginButton />
+            <p className="max-w-sm text-pretty text-xs leading-relaxed text-ink-500">
+              Signs you straight in to a shared demo account with a guild, voice
+              channels and conversations already set up. Its messages are wiped
+              automatically, so nothing anyone types is left behind.
+            </p>
+            <button
+              className="text-xs text-ink-400 underline-offset-4 transition-colors hover:text-white hover:underline"
               onClick={() =>
                 document
                   .getElementById("architecture")
                   ?.scrollIntoView({ behavior: "smooth" })
               }
             >
-              See how it works
-            </Button>
+              Or see how it works
+            </button>
           </div>
         </div>
 

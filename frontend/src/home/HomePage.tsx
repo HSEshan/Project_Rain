@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import {
   FiArrowRight,
+  FiCompass,
   FiMail,
   FiMessageCircle,
   FiPlus,
@@ -15,6 +16,7 @@ import Avatar from "../shared/Avatar";
 import Badge from "../shared/Badge";
 import Card from "./Card";
 import ViewHeader from "../shared/ViewHeader";
+import { useTourStore } from "../tour/tourStore";
 
 function greeting(): string {
   const hour = new Date().getHours();
@@ -36,6 +38,7 @@ export default function HomePage() {
   const { getDMChannels } = useChannelStore();
   const { getCurrentUser } = useAuth();
   const navigate = useNavigate();
+  const startTour = useTourStore((state) => state.start);
 
   const user = getCurrentUser();
   const dmCount = getDMChannels().length;
@@ -63,6 +66,14 @@ export default function HomePage() {
                   ? "You have something waiting."
                   : "Everything is quiet. Start a conversation."}
               </p>
+              {/* Always offered, not only on a first visit: someone who
+                  dismissed the tour has no other way back to it. */}
+              <button
+                onClick={startTour}
+                className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-rain-300 underline-offset-4 transition-colors hover:text-rain-200 hover:underline"
+              >
+                <FiCompass size={12} /> Take the tour
+              </button>
             </div>
           </div>
 

@@ -10,6 +10,8 @@ export interface SideBarButtonProps {
   badge?: number;
   /** Danger styling for destructive actions like logout. */
   destructive?: boolean;
+  /** Anchors a tour step to this button. See src/tour/steps.ts. */
+  tourId?: string;
 }
 
 /**
@@ -25,6 +27,7 @@ export default function SideBarButton({
   active,
   badge,
   destructive,
+  tourId,
 }: SideBarButtonProps) {
   const className = `group relative flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 ${
     active
@@ -54,7 +57,13 @@ export default function SideBarButton({
   );
 
   return to ? (
-    <Link to={to} className={className} aria-label={label} onClick={onClick}>
+    <Link
+      to={to}
+      className={className}
+      aria-label={label}
+      onClick={onClick}
+      data-tour={tourId}
+    >
       {inner}
     </Link>
   ) : (
@@ -63,6 +72,7 @@ export default function SideBarButton({
       onClick={onClick}
       className={className}
       aria-label={label}
+      data-tour={tourId}
     >
       {inner}
     </button>
