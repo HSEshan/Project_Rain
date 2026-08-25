@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x65vent.proto\x12\x05\x65vent\"\x88\x01\n\x05\x45vent\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12\x12\n\nevent_type\x18\x02 \x01(\t\x12\x11\n\tsender_id\x18\x03 \x01(\t\x12\x13\n\x0breceiver_id\x18\x04 \x01(\t\x12\x0c\n\x04text\x18\x05 \x01(\t\x12\x10\n\x08metadata\x18\x06 \x01(\t\x12\x11\n\ttimestamp\x18\x07 \x01(\t\"*\n\nEventBatch\x12\x1c\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x0c.event.Event\"\'\n\x03\x41\x63k\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2b\n\x0c\x45ventService\x12%\n\tSendEvent\x12\x0c.event.Event\x1a\n.event.Ack\x12+\n\nSendEvents\x12\x11.event.EventBatch\x1a\n.event.Ackb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0b\x65vent.proto\x12\x05\x65vent\"\xb0\x01\n\x05\x45vent\x12\x10\n\x08\x65vent_id\x18\x01 \x01(\t\x12\x12\n\nevent_type\x18\x02 \x01(\t\x12\x11\n\tsender_id\x18\x03 \x01(\t\x12\x13\n\x0breceiver_id\x18\x04 \x01(\t\x12\x0c\n\x04text\x18\x05 \x01(\t\x12\x10\n\x08metadata\x18\x06 \x01(\t\x12\x11\n\ttimestamp\x18\x07 \x01(\t\x12\x13\n\x0btarget_type\x18\x08 \x01(\t\x12\x11\n\ttarget_id\x18\t \x01(\t\"*\n\nEventBatch\x12\x1c\n\x06\x65vents\x18\x01 \x03(\x0b\x32\x0c.event.Event\"\'\n\x03\x41\x63k\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x0f\n\x07message\x18\x02 \x01(\t2b\n\x0c\x45ventService\x12%\n\tSendEvent\x12\x0c.event.Event\x1a\n.event.Ack\x12+\n\nSendEvents\x12\x11.event.EventBatch\x1a\n.event.Ackb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,11 +32,11 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'event_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   DESCRIPTOR._loaded_options = None
   _globals['_EVENT']._serialized_start=23
-  _globals['_EVENT']._serialized_end=159
-  _globals['_EVENTBATCH']._serialized_start=161
-  _globals['_EVENTBATCH']._serialized_end=203
-  _globals['_ACK']._serialized_start=205
-  _globals['_ACK']._serialized_end=244
-  _globals['_EVENTSERVICE']._serialized_start=246
-  _globals['_EVENTSERVICE']._serialized_end=344
+  _globals['_EVENT']._serialized_end=199
+  _globals['_EVENTBATCH']._serialized_start=201
+  _globals['_EVENTBATCH']._serialized_end=243
+  _globals['_ACK']._serialized_start=245
+  _globals['_ACK']._serialized_end=284
+  _globals['_EVENTSERVICE']._serialized_start=286
+  _globals['_EVENTSERVICE']._serialized_end=384
 # @@protoc_insertion_point(module_scope)

@@ -75,6 +75,11 @@ BATCH_INTERVAL_MS=1
 DEFAULT_TTL_SECONDS=300
 GRPC_HOST=ws_gateway
 GRPC_PORT=6000
+# Address other services reach THIS gateway on. Only needed with more
+# than one replica, where the service name above would load-balance and
+# events would land on a gateway that does not hold the socket. On
+# Kubernetes set it from status.podIP via the downward API.
+GRPC_ADVERTISE_HOST=
             """.strip()
         )
     with open("event_consumer.dev.env", "w") as f:
@@ -210,7 +215,12 @@ BATCH_SIZE=100
 BATCH_INTERVAL_MS=1
 DEFAULT_TTL_SECONDS=300
 GRPC_HOST=ws_gateway
-GRPC_PORT=6000""",
+GRPC_PORT=6000
+# Address other services reach THIS gateway on. Only needed with more
+# than one replica, where the service name above would load-balance and
+# events would land on a gateway that does not hold the socket. On
+# Kubernetes set it from status.podIP via the downward API.
+GRPC_ADVERTISE_HOST=""",
         "event_consumer.env": f"""{common}
 REDIS_HOST=redis
 REDIS_PORT=6379

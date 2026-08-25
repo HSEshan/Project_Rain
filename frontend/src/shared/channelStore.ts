@@ -3,6 +3,7 @@ import type { Channel } from "./types";
 import { getChannelParticipants, getUserChannels } from "./channelApiClient";
 import { ChannelType } from "./types";
 import { eventBus } from "../utils/EventBus";
+import { onResync } from "./resync";
 import { EventType, type EventPayload } from "../utils/eventType";
 
 interface ChannelStore {
@@ -124,6 +125,13 @@ eventBus.on(EventType.NOTIFICATION, async (event: EventPayload) => {
   const metadata = event.metadata as { channels_changed?: boolean } | undefined;
   if (!metadata?.channels_changed) return;
 
+  await useChannelStore.getState().fetchUserChannels();
+  await useChannelStore.getState().fetchDMChannelParticipants();
+});
+
+// A membership change that happened while the socket was down arrives as
+// nothing at all, so the reconnect has to assume the worst and re-read.
+onResync(async () => {
   await useChannelStore.getState().fetchUserChannels();
   await useChannelStore.getState().fetchDMChannelParticipants();
 });

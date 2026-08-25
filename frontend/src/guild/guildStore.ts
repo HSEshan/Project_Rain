@@ -9,6 +9,7 @@ import {
   type GuildInvite,
 } from "./apiClient";
 import { eventBus } from "../utils/EventBus";
+import { onResync } from "../shared/resync";
 import { EventAction, EventType, type EventPayload } from "../utils/eventType";
 
 export interface GuildStore {
@@ -161,4 +162,9 @@ eventBus.on(EventType.NOTIFICATION, async (event: EventPayload) => {
   if (useGuildStore.getState().getGuild(metadata.guild_id)) {
     useGuildStore.getState().fetchGuildMembers(metadata.guild_id);
   }
+});
+
+onResync(async () => {
+  await useGuildStore.getState().fetchUserGuilds();
+  await useGuildStore.getState().fetchInvites();
 });

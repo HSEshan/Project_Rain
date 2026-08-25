@@ -41,7 +41,7 @@ export default function LandingNav() {
             <a
               key={link.href}
               href={link.href}
-              className="rounded-lg px-3.5 py-2 text-sm text-ink-300 transition-colors hover:text-white"
+              className="rounded-lg px-3.5 py-2 text-sm text-ink-100 transition-colors hover:text-white"
             >
               {link.label}
             </a>

@@ -2,6 +2,7 @@ import { create } from "zustand";
 import type { Message } from "./types";
 import { getChannelMessages } from "./messageApiClient";
 import { eventBus } from "../utils/EventBus";
+import { onResync } from "./resync";
 import { EventType, type EventPayload } from "../utils/eventType";
 
 interface MessageStore {
@@ -120,5 +121,17 @@ eventBus.on(EventType.MESSAGE, (event: EventPayload) => {
     sender_id: event.sender_id,
     channel_id: event.receiver_id,
     created_at: event.timestamp,
+  });
+});
+
+/**
+ * Refetch every channel this session has actually opened. `byChannel` is the
+ * right scope: it is exactly the set the user can currently see stale, and it
+ * does not grow with the size of the account.
+ */
+onResync(() => {
+  const channelIds = Object.keys(useMessageStore.getState().byChannel);
+  channelIds.forEach((channelId) => {
+    void useMessageStore.getState().fetchChannelMessages(channelId);
   });
 });

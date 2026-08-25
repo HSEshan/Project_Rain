@@ -2,7 +2,7 @@ import asyncio
 import time
 
 import structlog
-from libs.event.schema import EventType
+from libs.event.schema import TargetType
 from src.redis_manager import RedisManager
 
 logger = structlog.get_logger(__name__)
@@ -27,8 +27,8 @@ class GrpcEndpointCache:
         if self.cleanup_task:
             self.cleanup_task.cancel()
 
-    async def get_cached_endpoints(self, receiver_id: str, event_type: str):
-        cache_key = f"{receiver_id}:{event_type}"
+    async def get_cached_endpoints(self, target_id: str, target_type: str):
+        cache_key = f"{target_type}:{target_id}"
         current_time = time.time()
 
         # Check cache
@@ -37,18 +37,18 @@ class GrpcEndpointCache:
             if current_time - cached_time < self.cache_ttl:
                 logger.debug(
                     "Returning cached endpoints",
-                    user_id=receiver_id,
+                    target_id=target_id,
                     cache_key=cache_key,
                 )
                 return endpoints
 
-        # Fetch from Redis — receiver_id is a user id for some event types and a
-        # channel id for others (libs.event.schema owns that distinction)
-        if EventType.is_user_addressed(event_type):
-            endpoints = await self.redis_manager.get_grpc_endpoint_for_user(receiver_id)
+        # The event says what it is addressed to, so nothing here has to infer
+        # it from the event type any more (libs.event.schema.TargetType)
+        if target_type == TargetType.USER.value:
+            endpoints = await self.redis_manager.get_grpc_endpoint_for_user(target_id)
         else:
             endpoints = await self.redis_manager.get_grpc_endpoints_for_channel(
-                receiver_id
+                target_id
             )
 
         # Only cache a positive result. "Nobody is connected" is the one answer
@@ -62,9 +62,33 @@ class GrpcEndpointCache:
             self.endpoint_cache.pop(cache_key, None)
 
         logger.debug(
-            "Fetched endpoints from Redis", receiver_id=receiver_id, endpoints=endpoints
+            "Fetched endpoints from Redis", target_id=target_id, endpoints=endpoints
         )
         return endpoints
+
+    def forget_endpoint(self, endpoint: str) -> None:
+        """Drop a gateway from every cached answer.
+
+        Called when delivery to it fails. Without this the cache keeps handing
+        out a dead address for the rest of the 30 second TTL, so every batch in
+        that window is aimed at a gateway that is already gone. Entries left
+        with no endpoints are removed entirely rather than cached empty, for the
+        same reason the negative-caching rule exists above.
+        """
+        emptied = []
+        for cache_key, (cached_time, endpoints) in self.endpoint_cache.items():
+            if endpoint not in endpoints:
+                continue
+            remaining = [e for e in endpoints if e != endpoint]
+            if remaining:
+                self.endpoint_cache[cache_key] = (cached_time, remaining)
+            else:
+                emptied.append(cache_key)
+
+        for cache_key in emptied:
+            del self.endpoint_cache[cache_key]
+
+        logger.debug("Dropped endpoint from cache", endpoint=endpoint)
 
     async def _cleanup_cache(self):
         """Periodic cache cleanup to prevent memory leaks."""

@@ -7,6 +7,7 @@ import {
 } from "livekit-client";
 import { create } from "zustand";
 import { eventBus } from "../utils/EventBus";
+import { onResync } from "../shared/resync";
 import { EventAction, EventType, type EventPayload } from "../utils/eventType";
 import { getVoiceParticipants, joinVoiceChannel, livekitUrl } from "./apiClient";
 
@@ -248,5 +249,14 @@ eventBus.on(EventType.VOICE_STATE, (event: EventPayload) => {
         : [...current, userId]
       : current.filter((id) => id !== userId);
     return { rosters: { ...state.rosters, [channelId]: next } };
+  });
+});
+
+// VOICE_STATE deltas missed during a disconnect leave the roster wrong in both
+// directions, so re-read the snapshot for every channel we are tracking.
+onResync(() => {
+  const channelIds = Object.keys(useVoiceStore.getState().rosters);
+  channelIds.forEach((channelId) => {
+    void useVoiceStore.getState().fetchRoster(channelId);
   });
 });

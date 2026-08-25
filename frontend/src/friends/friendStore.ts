@@ -6,6 +6,7 @@ import {
 } from "./apiClient";
 import type { User } from "../shared/userStore";
 import { eventBus } from "../utils/EventBus";
+import { onResync } from "../shared/resync";
 import { EventType, type EventPayload } from "../utils/eventType";
 import { useUserStore } from "../shared/userStore";
 
@@ -122,4 +123,11 @@ eventBus.on(EventType.NOTIFICATION, (event: EventPayload) => {
   }
   useFriendStore.getState().fetchFriends();
   useFriendStore.getState().fetchOutgoingRequests();
+});
+
+onResync(() => {
+  const store = useFriendStore.getState();
+  void store.fetchFriends();
+  void store.fetchFriendRequests();
+  void store.fetchOutgoingRequests();
 });

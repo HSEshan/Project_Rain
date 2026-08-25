@@ -19,11 +19,25 @@ export enum EventAction {
   VOICE_LEFT = "voice_left",
 }
 
+/** What kind of thing an event is addressed to. Mirrors `TargetType` in libs. */
+export enum TargetType {
+  USER = "user",
+  CHANNEL = "channel",
+}
+
 export type EventPayload = {
   event_id: string;
   event_type: string;
   sender_id: string;
+  /**
+   * Deprecated. A channel id for `message` and `voice_state`, a user id for
+   * `notification` and `friend_request`, with nothing here saying which.
+   * `target_type`/`target_id` replace it; the server still sends both, so
+   * nothing has to move until the old field is dropped.
+   */
   receiver_id: string;
+  target_type?: TargetType;
+  target_id?: string;
   text: string;
   metadata?: Record<string, unknown>;
   timestamp: string; // ISO 8601 format

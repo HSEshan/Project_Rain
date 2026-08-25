@@ -8,10 +8,17 @@ message Event {
   string event_id = 1;
   string event_type = 2;
   string sender_id = 3;
+  // Deprecated in favour of target_type/target_id. Still populated so a gateway
+  // that has not been redeployed yet keeps routing. See devnotes.md, A1.
   string receiver_id = 4;
   string text = 5;
   string metadata = 6;
   string timestamp = 7;
+  // Added 2026-08-24. New field numbers, so an old consumer ignores them and a
+  // new consumer reads "" from an old producer, which is what the fallback in
+  // libs.event.schema.Event._fill_target handles.
+  string target_type = 8;
+  string target_id = 9;
 }
 
 message EventBatch {

@@ -140,7 +140,7 @@ class VoiceService(BaseService):
 
     async def _get_voice_channel(self, user: CurrentUser, channel_id: str) -> Channel:
         # 404 rather than 403 when they are not a member: whether the channel
-        # exists is itself privileged (see AGENTS.md)
+        # exists is itself privileged
         await ChannelRepository.check_channel_member(self.db, user.id, channel_id)
 
         result = await self.db.execute(select(Channel).where(Channel.id == channel_id))

@@ -18,7 +18,10 @@ class MessageEventDispatcher:
                 {
                     "id": e.event_id,
                     "sender_id": e.sender_id,
-                    "channel_id": e.receiver_id,
+                    # Asserts the event is channel-addressed rather than
+                    # trusting the raw id: a user-addressed event reaching here
+                    # would otherwise write a row whose channel_id is a user id
+                    "channel_id": e.channel_id,
                     "content": e.text,
                 }
                 for e in events

@@ -24,6 +24,13 @@ async def lifespan(app: FastAPI):
     )
     websocket_manager.set_redis_manager(redis_manager)
     server_task = asyncio.create_task(serve_grpc_server(settings.GRPC_PORT))
+    # Say out loud what this instance thinks other services should reach it on.
+    # It is the first thing to check when a replica's events go missing.
+    logger.info(
+        "Advertising gRPC endpoint",
+        endpoint=settings.GRPC_ENDPOINT,
+        explicit=bool(settings.GRPC_ADVERTISE_HOST),
+    )
     websocket_manager.set_grpc_endpoint(settings.GRPC_ENDPOINT)
     event_queue.set_event_dispatcher(event_dispatcher)
     event_dispatcher.set_redis_manager(redis_manager)

@@ -47,8 +47,12 @@ class StreamWorker:
                 )
 
                 if event_batch:
-                    # Run in background
-                    self.event_loop.create_task(self._process_batch(event_batch))
+                    # Awaited, not detached. As a background task its exceptions
+                    # went nowhere, and two batches from the same shard could be
+                    # in flight at once — which quietly undid the ordering the
+                    # whole sharding scheme exists to provide. One batch at a
+                    # time per shard is the guarantee; shards run concurrently.
+                    await self._process_batch(event_batch)
                 else:
                     await asyncio.sleep(0.01)
             except Exception as e:
@@ -72,26 +76,50 @@ class StreamWorker:
                 decoded_data = {k.decode(): v.decode() for k, v in message_data.items()}
                 event = EventCodec.to_grpc(decoded_data)
                 endpoints = await self.grpc_endpoint_cache.get_cached_endpoints(
-                    event.receiver_id, event.event_type
+                    event.target_id, event.target_type
                 )
                 if not endpoints:
                     logger.warning(
-                        "No gRPC endpoints found for receiver",
-                        receiver_id=event.receiver_id,
+                        "No gRPC endpoints found for target",
+                        target_type=event.target_type,
+                        target_id=event.target_id,
                     )
                     continue
                 for endpoint in endpoints:
                     gateway_batches[endpoint].append(event)
 
-        tasks = []
-        for endpoint, events in gateway_batches.items():
-            batch = ProtobufEventBatch(events=events)
-            tasks.append(self._transmit_batch(endpoint, batch))
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-        for result in results:
+        endpoints = list(gateway_batches)
+        results = await asyncio.gather(
+            *(
+                self._transmit_batch(endpoint, ProtobufEventBatch(events=events))
+                for endpoint, events in gateway_batches.items()
+            ),
+            return_exceptions=True,
+        )
+
+        # One unreachable gateway must not cost the whole batch.
+        #
+        # This used to re-raise the first exception, before the ACK, from inside
+        # a detached task whose exception nobody observed. The effect was that a
+        # single dead endpoint discarded every entry in the batch — including
+        # the ones already delivered to other gateways — and because reads use
+        # ">" and nothing runs XAUTOCLAIM, those entries sat in the pending list
+        # forever. Not retried: lost.
+        #
+        # So: acknowledge what was handled, and drop the failing endpoint from
+        # the cache so the next lookup re-resolves it from Redis instead of
+        # serving a dead address for the rest of the TTL. Events already handed
+        # to a failing endpoint are lost until there is a reclaim loop; that is
+        # a bounded, logged loss rather than an unbounded silent one.
+        for endpoint, result in zip(endpoints, results):
             if isinstance(result, Exception):
-                logger.error("Failed to send events to gRPC endpoint", error=result)
-                raise result
+                logger.error(
+                    "Delivery to gateway failed, dropping it from the cache",
+                    endpoint=endpoint,
+                    events=len(gateway_batches[endpoint]),
+                    error=str(result),
+                )
+                self.grpc_endpoint_cache.forget_endpoint(endpoint)
 
         await self.redis_manager.batch_ack_messages(
             stream_name_str,

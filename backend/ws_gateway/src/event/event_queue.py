@@ -1,6 +1,5 @@
 import asyncio
 from collections import defaultdict
-from copy import deepcopy
 from typing import Dict, List
 
 import structlog
@@ -9,6 +8,11 @@ from src.core.config import settings
 from src.event.event_dispatcher import EventDispatcher
 
 logger = structlog.get_logger()
+
+# How long a producer waits for the accumulator to drain before giving up on
+# an event. Long enough to ride out a slow batch, short enough that a wedged
+# gateway refuses work instead of swallowing it.
+BACKPRESSURE_TIMEOUT_SECONDS = 5
 
 
 class EventQueue:
@@ -34,6 +38,36 @@ class EventQueue:
                 pass
 
     async def enqueue_event(self, event: Event):
+        """Accept an event for the next batch, applying backpressure when full.
+
+        The accumulator used to be unbounded. A Redis outage costs nothing here
+        (the publish is downstream), but a slow or dead Postgres stalls the
+        batch loop inside its await while this keeps appending, and the process
+        grows until it dies.
+
+        Dropping is not an option: at this point the event has not been
+        persisted, so discarding it loses the message outright rather than
+        merely delaying it. Waiting is the honest response — it stops reading
+        this one client's socket, TCP backpressure reaches their browser, and
+        every other connection is unaffected because each has its own task.
+        """
+        if self.batch_size >= settings.MAX_PENDING_EVENTS:
+            logger.warning(
+                "Event buffer full, applying backpressure",
+                pending=self.batch_size,
+                limit=settings.MAX_PENDING_EVENTS,
+            )
+            try:
+                async with asyncio.timeout(BACKPRESSURE_TIMEOUT_SECONDS):
+                    while self.batch_size >= settings.MAX_PENDING_EVENTS:
+                        await asyncio.sleep(0.01)
+            except TimeoutError:
+                # The batch loop is not draining. Refusing loudly beats queueing
+                # into a process that is already failing.
+                raise RuntimeError(
+                    "Event buffer full and not draining; dropping inbound event"
+                )
+
         self.batch[event.event_type].append(event)
         self.batch_size += 1
 
@@ -55,9 +89,27 @@ class EventQueue:
 
             # Process batches
             if self.batch:
-                await self.event_dispatcher.dispatch_events(deepcopy(self.batch))
-                self.batch.clear()
+                # Take the batch away *before* awaiting, rather than clearing it
+                # afterwards. The old code did `dispatch(deepcopy(batch))` and
+                # then `batch.clear()`, so anything a client sent during the
+                # dispatch — a Postgres round trip, easily longer than the 1ms
+                # batch interval — was appended to the live dict and then wiped
+                # without ever being dispatched. Messages were lost in ordinary
+                # operation, invisibly, because they had already been persisted
+                # and so reappeared on the next fetch.
+                #
+                # Swapping also makes the deepcopy unnecessary: nothing else
+                # holds a reference to `pending` any more.
+                pending = self.batch
+                self.batch = defaultdict(list)
                 self.batch_size = 0
+                try:
+                    await self.event_dispatcher.dispatch_events(pending)
+                except Exception:
+                    # This loop is the only thing draining the accumulator. If
+                    # it dies the gateway silently stops delivering anything,
+                    # so it must survive a bad batch.
+                    logger.exception("Batch dispatch failed", events=len(pending))
 
 
 event_queue = EventQueue()
