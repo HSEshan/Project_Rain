@@ -8,10 +8,17 @@ from libs.rediskeys import RediKeys
 
 from .codec import EventCodec
 from .schema import Event
+from .shards import DEFAULT_NUM_SHARDS
 
 logger = structlog.get_logger()
 
-DEFAULT_NUM_SHARDS = 16
+# Re-exported: DEFAULT_NUM_SHARDS lived here before `shards` existed.
+__all__ = [
+    "DEFAULT_NUM_SHARDS",
+    "DEFAULT_STREAM_MAXLEN",
+    "EventPublisher",
+    "compute_shard_id",
+]
 
 # How many entries a shard keeps. XACK removes an entry from a consumer group's
 # pending list, it does **not** remove it from the stream: a stream is

@@ -135,6 +135,33 @@ def channels_changed(
     )
 
 
+def group_dm_updated(
+    *,
+    actor_id: str,
+    to_user_id: str,
+    channel_id: str,
+    text: str,
+) -> Event:
+    """A group DM the recipient is already in changed name or membership.
+
+    Separate from `channels_changed` on purpose. The recipient did not join or
+    leave anything, so making the gateway re-read its channel mapping and the
+    client rebuild its channel list would be work for a fact neither of them
+    got wrong. What is stale is one channel's name and member list, and that is
+    what the metadata names.
+    """
+    return Event(
+        event_type=EventType.NOTIFICATION,
+        sender_id=str(actor_id),
+        receiver_id=str(to_user_id),
+        text=text,
+        metadata={
+            "action": EventAction.GROUP_DM_UPDATED.value,
+            "channel_id": str(channel_id),
+        },
+    )
+
+
 def voice_state_changed(
     *, actor_id: str, actor_username: str, channel_id: str, joined: bool
 ) -> Event:

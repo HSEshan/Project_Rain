@@ -14,6 +14,9 @@ interface UiStore {
   /** Guild members list as a drawer below `xl`. */
   membersOpen: boolean;
   setMembersOpen: (open: boolean) => void;
+  /** "New group" modal, opened from the messages sidebar. */
+  groupCreateOpen: boolean;
+  setGroupCreateOpen: (open: boolean) => void;
   closeAll: () => void;
 }
 
@@ -22,5 +25,7 @@ export const useUiStore = create<UiStore>((set) => ({
   setPanelOpen: (panelOpen) => set({ panelOpen }),
   membersOpen: false,
   setMembersOpen: (membersOpen) => set({ membersOpen }),
+  groupCreateOpen: false,
+  setGroupCreateOpen: (groupCreateOpen) => set({ groupCreateOpen }),
   closeAll: () => set({ panelOpen: false, membersOpen: false }),
 }));

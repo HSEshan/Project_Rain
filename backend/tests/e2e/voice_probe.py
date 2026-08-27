@@ -221,6 +221,24 @@ async def main() -> int:
     probe_channel = next(c for c in guild_channels if c["name"] == "probe-voice")
     text_channel = next(c for c in guild_channels if c["type"] == "guild_text")
 
+    # alice and bob also become friends, which is what gives them a DM to call
+    # each other in. Set up before the socket opens so the channel exists by the
+    # time bob is listening.
+    call(
+        "POST",
+        f"/friendship/friends/request?to_username={bob['username']}",
+        token=alice["token"],
+    )
+    status, requests = call(
+        "GET", "/friendship/friends/request/me", token=bob["token"]
+    )
+    status, accepted = call(
+        "POST",
+        f"/friendship/friends/request/{requests[0]['id']}/accept",
+        token=bob["token"],
+    )
+    dm_channel_id = accepted["dm_channel_id"]
+
     # bob watches from outside the room: presence has to reach people who have
     # not joined, which is the whole reason it goes through our pipeline
     async with websockets.connect(GATEWAY + bob["token"]) as bob_ws:
@@ -354,6 +372,84 @@ async def main() -> int:
             "livekit's own room_started heals a stale roster",
             ok,
             f"{current} (is `webhook.urls` set in livekit.yaml?)",
+        )
+
+        # A DM is callable too, as of 2026-08-25, and it reuses every part of
+        # this: room id is still the channel id, and presence is still the same
+        # channel-addressed event. What matters here is that it reaches the
+        # *other* person in the DM without them doing anything, because that
+        # event is the only thing that can make their client ring.
+        status, dm_session = call(
+            "POST", f"/channels/{dm_channel_id}/voice/join", token=alice["token"]
+        )
+        report(
+            "a dm accepts a call",
+            status == 200 and bool(dm_session.get("token")),
+            f"{status} {dm_session}",
+        )
+        report(
+            "the dm call room is the dm channel",
+            status == 200 and dm_session.get("room") == dm_channel_id,
+            str(dm_session),
+        )
+
+        async def wait_for_room_event(action, wanted_room):
+            """Room-scoped, unlike `wait_for_event`.
+
+            The guild checks above already put a `voice_joined` in `received`,
+            so matching on the action alone would find that one and pass
+            without the DM event ever arriving.
+            """
+            deadline = asyncio.get_event_loop().time() + 10
+            while asyncio.get_event_loop().time() < deadline:
+                found = next(
+                    (
+                        e
+                        for e in received
+                        if e.get("event_type") == "voice_state"
+                        and (e.get("metadata") or {}).get("action") == action
+                        and (e.get("metadata") or {}).get("channel_id") == wanted_room
+                    ),
+                    None,
+                )
+                if found:
+                    return found
+                await asyncio.sleep(0.1)
+            return None
+
+        status = post_webhook(
+            {
+                "event": "participant_joined",
+                "room": {"name": dm_channel_id},
+                "participant": {"identity": alice["id"], "name": alice["username"]},
+            }
+        )
+        report("dm participant_joined webhook accepted", status == 200, str(status))
+
+        ringing = await wait_for_room_event("voice_joined", dm_channel_id)
+        report("a dm call rings the other side over ws", ringing is not None)
+        if ringing:
+            report(
+                "the ring names the caller",
+                ringing["metadata"].get("user_id") == alice["id"],
+                str(ringing["metadata"]),
+            )
+
+        ok, current = await wait_for_roster(dm_channel_id, bob["token"], [alice["id"]])
+        report("the caller is in the dm call roster", ok, str(current))
+
+        post_webhook(
+            {
+                "event": "participant_left",
+                "room": {"name": dm_channel_id},
+                "participant": {"identity": alice["id"], "name": alice["username"]},
+            }
+        )
+        ok, current = await wait_for_roster(dm_channel_id, bob["token"], [])
+        report("hanging up clears the dm call roster", ok, str(current))
+        report(
+            "hanging up is delivered to the other side",
+            await wait_for_room_event("voice_left", dm_channel_id) is not None,
         )
 
         room_service("DeleteRoom", {"room": room}, room)

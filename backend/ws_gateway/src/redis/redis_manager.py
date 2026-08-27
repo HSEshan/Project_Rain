@@ -4,6 +4,7 @@ from typing import List, Optional
 import structlog
 from libs.event.publisher import EventPublisher
 from libs.event.schema import Event
+from libs.event.shards import register_shard_count
 from libs.rediskeys import RediKeys
 from redis.asyncio import Redis
 from sqlalchemy import text
@@ -26,6 +27,9 @@ class RedisManager:
                 await self.redis.ping()
                 self.publisher = EventPublisher(self.redis, settings.NUM_SHARDS)
                 logger.info("Connected to Redis")
+                await register_shard_count(
+                    self.redis, "ws_gateway", settings.NUM_SHARDS
+                )
                 break
             except Exception as e:
                 logger.error(

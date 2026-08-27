@@ -6,6 +6,7 @@ import { useGuildStore } from "../guild/guildStore";
 import { useFriendStore } from "../friends/friendStore";
 import { resetAllStores } from "../shared/resetStores";
 import Avatar from "../shared/Avatar";
+import ProfileTrigger from "../profile/ProfileTrigger";
 import ConnectionDot from "../shared/ConnectionDot";
 import Logo from "../landing_page/Logo";
 import SideBarButton from "./SideBarButton";
@@ -85,7 +86,15 @@ export function Sidebar() {
           two layouts want different children, not a different arrangement. */}
       <div className="hidden lg:mt-auto lg:flex lg:flex-col lg:items-center lg:gap-3">
         <ConnectionDot />
-        <Avatar name={user?.username} seed={user?.id} size="sm" />
+        {/* The rail foot is where people look for their own account, so this is
+            the one profile trigger that opens the card on yourself. */}
+        <ProfileTrigger
+          userId={user?.id}
+          label="Your profile"
+          className="rounded-full"
+        >
+          <Avatar name={user?.username} seed={user?.id} size="sm" />
+        </ProfileTrigger>
         <SideBarButton label="Log out" onClick={handleLogout} destructive>
           <FiLogOut size={18} />
         </SideBarButton>

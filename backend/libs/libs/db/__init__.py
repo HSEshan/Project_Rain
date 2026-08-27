@@ -17,6 +17,9 @@ from libs.db.base import (
     generate_timestamp_iso,
 )
 from libs.db.models import (
+    CALLABLE_CHANNEL_TYPES,
+    DIRECT_CHANNEL_TYPES,
+    MAX_GROUP_DM_MEMBERS,
     Channel,
     ChannelMember,
     ChannelType,
@@ -33,6 +36,9 @@ from libs.db.models import (
 from libs.db.session import create_engine, create_session_factory
 
 __all__ = [
+    "CALLABLE_CHANNEL_TYPES",
+    "DIRECT_CHANNEL_TYPES",
+    "MAX_GROUP_DM_MEMBERS",
     "Base",
     "Channel",
     "ChannelMember",

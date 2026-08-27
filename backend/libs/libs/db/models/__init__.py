@@ -4,7 +4,14 @@ Alembic autogenerate and any `create_all` only see tables that have been
 imported, so nothing here may be dropped even if it looks unused.
 """
 
-from libs.db.models.channel import Channel, ChannelMember, ChannelType
+from libs.db.models.channel import (
+    CALLABLE_CHANNEL_TYPES,
+    DIRECT_CHANNEL_TYPES,
+    MAX_GROUP_DM_MEMBERS,
+    Channel,
+    ChannelMember,
+    ChannelType,
+)
 from libs.db.models.friendship import FriendRequest, Friendship
 from libs.db.models.guild import (
     Guild,
@@ -17,6 +24,9 @@ from libs.db.models.message import Message
 from libs.db.models.user import User
 
 __all__ = [
+    "CALLABLE_CHANNEL_TYPES",
+    "DIRECT_CHANNEL_TYPES",
+    "MAX_GROUP_DM_MEMBERS",
     "Channel",
     "ChannelMember",
     "ChannelType",

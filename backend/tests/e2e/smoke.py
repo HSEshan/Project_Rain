@@ -140,6 +140,9 @@ print("== auth ==")
 alice = register("alice")
 bob = register("bob")
 carol = register("carol")
+# A fourth, who is nobody's friend to begin with: the group DM rules are about
+# who you are *not* allowed to pull into a room.
+dave = register("dave")
 check("registered three users", all(u["id"] for u in (alice, bob, carol)))
 
 print("== unauthenticated routes are closed ==")
@@ -437,6 +440,259 @@ check(
     str(bob_channels),
 )
 
+print("== profile card ==")
+status, profile = call("GET", f"/users/{bob['id']}/profile", token=alice["token"])
+check("profile readable", status == 200, str(profile))
+
+# The regression that opened this section. `GET /users/` returned the ORM row
+# with no response model, so any authenticated user could read anyone's email
+# and bcrypt hash. Both routes now declare one; these two checks are the reason
+# they may never stop declaring one.
+check("profile hides the email", "email" not in (profile or {}), str(profile))
+check("profile hides the password hash", "password_hash" not in (profile or {}))
+status, plain = call("GET", f"/users/?user_id={bob['id']}", token=alice["token"])
+check("GET /users/ hides the email", "email" not in (plain or {}), str(plain))
+check("GET /users/ hides the password hash", "password_hash" not in (plain or {}))
+
+check(
+    "friends see each other as friends",
+    (profile or {}).get("friend_state") == "friends",
+    str(profile),
+)
+check(
+    "the profile points at the existing dm",
+    (profile or {}).get("dm_channel_id") == dm_channel_id,
+    str(profile),
+)
+# A guild of their own, because bob was removed from Rainforest a few checks
+# ago. That is itself the interesting half: a guild you were removed from must
+# stop being mutual.
+check(
+    "a guild you were removed from is not mutual",
+    (profile or {}).get("mutual_guilds") == [],
+    str(profile),
+)
+status, shared_guild = call(
+    "POST",
+    "/guilds/",
+    {"name": "Profile Guild", "description": "for the card"},
+    token=alice["token"],
+    expect=201,
+)
+status, shared_invite = call(
+    "POST",
+    f"/guilds/{shared_guild['id']}/invite",
+    {"user_id": bob["id"]},
+    token=alice["token"],
+    expect=201,
+)
+call(
+    "POST",
+    f"/guilds/{shared_guild['id']}/invites/{shared_invite['invite_id']}/accept",
+    token=bob["token"],
+    expect=201,
+)
+status, profile = call("GET", f"/users/{bob['id']}/profile", token=alice["token"])
+check(
+    "mutual guilds are listed",
+    [g["name"] for g in (profile or {}).get("mutual_guilds", [])] == ["Profile Guild"],
+    str(profile),
+)
+
+status, own = call("GET", f"/users/{alice['id']}/profile", token=alice["token"])
+check("your own profile says so", (own or {}).get("friend_state") == "self", str(own))
+
+status, stranger = call("GET", f"/users/{carol['id']}/profile", token=alice["token"])
+check(
+    "a stranger is a stranger",
+    (stranger or {}).get("friend_state") == "none"
+    and (stranger or {}).get("dm_channel_id") is None
+    and (stranger or {}).get("mutual_guilds") == [],
+    str(stranger),
+)
+
+status, _ = call("GET", f"/users/{uuid.uuid4()}/profile", token=alice["token"])
+check("unknown user is 404", status == 404, f"got {status}")
+status, _ = call("GET", f"/users/{bob['id']}/profile")
+check("profile requires auth", status == 401, f"got {status}")
+
+print("== group dms ==")
+# alice is friends with bob already; carol has to be a friend too, because you
+# can only put your own friends in a group.
+status, _ = call(
+    "POST",
+    f"/friendship/friends/request?to_username={carol['username']}",
+    token=alice["token"],
+    expect=201,
+)
+status, carol_requests = call(
+    "GET", "/friendship/friends/request/me", token=carol["token"], expect=200
+)
+call(
+    "POST",
+    f"/friendship/friends/request/{carol_requests[0]['id']}/accept",
+    token=carol["token"],
+    expect=200,
+)
+
+status, group = call(
+    "POST",
+    "/channels/group",
+    {"user_ids": [bob["id"], carol["id"]], "name": "Smoke crew"},
+    token=alice["token"],
+    expect=201,
+)
+group_id = (group or {}).get("id")
+check("group dm created", status == 201, str(group))
+check("group dm has its own type", (group or {}).get("type") == "group_dm", str(group))
+check(
+    "the creator owns it", (group or {}).get("owner_id") == alice["id"], str(group)
+)
+
+status, members = call("GET", f"/channels/{group_id}/members", token=bob["token"])
+member_ids = [m["user_id"] for m in (members or {}).get("members", [])]
+check("everyone is in it", sorted(member_ids) == sorted(
+    [alice["id"], bob["id"], carol["id"]]
+), str(members))
+check(
+    "exactly one owner, and it is the creator",
+    [m["user_id"] for m in (members or {}).get("members", []) if m["is_owner"]]
+    == [alice["id"]],
+    str(members),
+)
+
+status, carol_channels = call("GET", "/channels/me", token=carol["token"], expect=200)
+check(
+    "a group dm shows up in its members' channels",
+    any(c["id"] == group_id for c in carol_channels or []),
+    str(carol_channels),
+)
+
+# The rule that keeps a group DM from being a way to corner strangers
+status, body = call(
+    "POST",
+    "/channels/group",
+    {"user_ids": [dave["id"], bob["id"]]},
+    token=alice["token"],
+)
+check("cannot open a group with a non-friend", status == 403, f"got {status} {body}")
+status, _ = call(
+    "POST", "/channels/group", {"user_ids": [bob["id"]]}, token=alice["token"]
+)
+check("a group needs more than one other person", status == 422, f"got {status}")
+status, _ = call(
+    "POST", "/channels/group", {"user_ids": [bob["id"], bob["id"]]}, token=alice["token"]
+)
+check("the same person twice is rejected", status == 422, f"got {status}")
+status, _ = call(
+    "POST",
+    "/channels/group",
+    {"user_ids": [bob["id"], alice["id"]]},
+    token=alice["token"],
+)
+check("you are already in your own group", status == 400, f"got {status}")
+
+status, body = call(
+    "POST", f"/channels/{group_id}/members", {"user_id": dave["id"]}, token=alice["token"]
+)
+check("cannot add a non-friend later either", status == 403, f"got {status} {body}")
+
+# ...but anyone in the group may add one of *their* friends
+status, _ = call(
+    "POST",
+    f"/friendship/friends/request?to_username={dave['username']}",
+    token=bob["token"],
+    expect=201,
+)
+status, dave_requests = call(
+    "GET", "/friendship/friends/request/me", token=dave["token"], expect=200
+)
+call(
+    "POST",
+    f"/friendship/friends/request/{dave_requests[0]['id']}/accept",
+    token=dave["token"],
+    expect=200,
+)
+status, roster = call(
+    "POST", f"/channels/{group_id}/members", {"user_id": dave["id"]}, token=bob["token"]
+)
+check("any member can add their own friend", status == 201, f"got {status} {roster}")
+check("the new roster comes back", len((roster or {}).get("members", [])) == 4, str(roster))
+
+status, _ = call(
+    "POST", f"/channels/{group_id}/members", {"user_id": dave["id"]}, token=bob["token"]
+)
+check("adding someone twice is 409", status == 409, f"got {status}")
+
+status, renamed = call(
+    "PATCH", f"/channels/{group_id}", {"name": "Renamed crew"}, token=carol["token"]
+)
+check(
+    "any member can rename the group",
+    status == 200 and (renamed or {}).get("name") == "Renamed crew",
+    f"{status} {renamed}",
+)
+
+# None of this applies to a two-person DM, which has no roster to manage
+status, _ = call("PATCH", f"/channels/{dm_channel_id}", {"name": "no"}, token=alice["token"])
+check("a two-person dm cannot be renamed", status == 403, f"got {status}")
+status, _ = call(
+    "DELETE", f"/channels/{dm_channel_id}/members/me", token=alice["token"]
+)
+check("a two-person dm cannot be left", status == 403, f"got {status}")
+
+status, _ = call(
+    "DELETE", f"/channels/{group_id}/members/me", token=alice["token"], expect=204
+)
+check("the owner can leave", status == 204, f"got {status}")
+status, members = call("GET", f"/channels/{group_id}/members", token=bob["token"])
+check(
+    "ownership moves to the longest-standing member left",
+    [m["user_id"] for m in (members or {}).get("members", []) if m["is_owner"]]
+    == [bob["id"]],
+    str(members),
+)
+status, _ = call("GET", f"/channels/{group_id}/members", token=alice["token"])
+check("leaving takes your access with it", status == 404, f"got {status}")
+
+for departing in (bob, carol, dave):
+    call("DELETE", f"/channels/{group_id}/members/me", token=departing["token"])
+status, _ = call("GET", f"/channels/{group_id}", token=bob["token"])
+check("the last one out deletes the group", status == 404, f"got {status}")
+
+print("== dm calls ==")
+status, session = call(
+    "POST", f"/channels/{dm_channel_id}/voice/join", token=alice["token"]
+)
+check("a dm accepts a call", status == 200 and bool((session or {}).get("token")), str(status))
+check(
+    "the call room is the dm channel",
+    (session or {}).get("room") == dm_channel_id,
+    str(session)[:120],
+)
+
+status, callable_group = call(
+    "POST",
+    "/channels/group",
+    {"user_ids": [bob["id"], carol["id"]]},
+    token=alice["token"],
+    expect=201,
+)
+status, session = call(
+    "POST",
+    f"/channels/{(callable_group or {}).get('id')}/voice/join",
+    token=carol["token"],
+)
+check("a group dm accepts a call", status == 200 and bool((session or {}).get("token")), str(status))
+
+status, roster = call(
+    "GET", f"/channels/{dm_channel_id}/voice/participants", token=bob["token"]
+)
+check("the other side can read the call roster", status == 200, str(roster))
+
+status, _ = call("POST", f"/channels/{dm_channel_id}/voice/join", token=dave["token"])
+check("a non-member cannot call", status == 404, f"got {status}")
+
 print("== websocket round trip ==")
 run_probe(
     "ws_probe.py",
@@ -465,7 +721,12 @@ print("== realtime events from rest mutations ==")
 # Fresh users: this probe drives its own friend request and guild join
 run_probe(
     "realtime_probe.py",
-    {"alice": register("rt_alice"), "bob": register("rt_bob")},
+    {
+        "alice": register("rt_alice"),
+        "bob": register("rt_bob"),
+        "carol": register("rt_carol"),
+        "dave": register("rt_dave"),
+    },
     "realtime probe",
 )
 

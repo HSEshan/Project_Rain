@@ -3,6 +3,7 @@ from typing import Iterable
 import structlog
 from libs.event.publisher import EventPublisher
 from libs.event.schema import Event
+from libs.event.shards import register_shard_count
 from libs.rediskeys import RediKeys
 from redis.asyncio import Redis
 from src.core.config import settings
@@ -37,6 +38,7 @@ class RealtimePublisher:
             await self.redis.ping()
             self.publisher = EventPublisher(self.redis, settings.NUM_SHARDS)
             logger.info("Realtime publisher connected to Redis")
+            await register_shard_count(self.redis, "rest_api", settings.NUM_SHARDS)
         except Exception:
             logger.exception("Realtime publisher could not reach Redis")
             self.redis = None

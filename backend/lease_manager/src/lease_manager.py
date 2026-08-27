@@ -3,6 +3,7 @@ import time
 from typing import List
 
 import structlog
+from libs.event.shards import register_shard_count
 from libs.rediskeys import RediKeys
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
@@ -14,7 +15,7 @@ logger = structlog.get_logger(__name__)
 class LeaseManager:
     def __init__(self):
         self.redis: Redis | None = None
-        self.num_streams = config.num_streams
+        self.num_shards = config.num_shards
         self.running = True
         self.suspect_consumers = {}
 
@@ -25,6 +26,9 @@ class LeaseManager:
                 self.redis = Redis(host=host, port=port, db=db)
                 await self.redis.ping()
                 logger.info("Connected to Redis")
+                await register_shard_count(
+                    self.redis, "lease_manager", self.num_shards
+                )
                 break
             except Exception as e:
                 logger.error("Error connecting to Redis on attempt", attempt=i, error=e)
@@ -39,7 +43,7 @@ class LeaseManager:
         """
         Ensure that the consumer groups exist for the given streams.
         """
-        for stream_id in range(self.num_streams):
+        for stream_id in range(self.num_shards):
             stream_name = RediKeys.stream_shard(stream_id)
             try:
                 await self.redis.xgroup_create(
@@ -89,8 +93,8 @@ class LeaseManager:
             logger.info("No active consumers")
             return
 
-        leases_per_consumer = self.num_streams // len(consumers)
-        remainder = self.num_streams % len(consumers)
+        leases_per_consumer = self.num_shards // len(consumers)
+        remainder = self.num_shards % len(consumers)
 
         assignments = {}
         stream_id = 0

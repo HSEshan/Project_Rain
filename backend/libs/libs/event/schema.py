@@ -92,6 +92,12 @@ class EventAction(str, Enum):
     GUILD_INVITE_REMOVED = "guild_invite_removed"
     # Nothing to show the user beyond "your channels changed"
     CHANNELS_CHANGED = "channels_changed"
+    # A group DM this user is already in was renamed, or gained or lost a
+    # member. Deliberately *not* carrying CHANNELS_CHANGED_FLAG: the recipient's
+    # own membership did not change, so neither the gateway's routing nor the
+    # client's channel list needs rebuilding. Only that channel's name and
+    # member list are stale.
+    GROUP_DM_UPDATED = "group_dm_updated"
     VOICE_JOINED = "voice_joined"
     VOICE_LEFT = "voice_left"
 

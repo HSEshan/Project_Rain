@@ -15,6 +15,12 @@ export enum EventAction {
   GUILD_INVITE_RECEIVED = "guild_invite_received",
   GUILD_INVITE_REMOVED = "guild_invite_removed",
   CHANNELS_CHANGED = "channels_changed",
+  /**
+   * A group DM you are already in was renamed or changed roster. Deliberately
+   * not a membership change: only that channel's name and member list are
+   * stale, so the client refetches those two things and nothing else.
+   */
+  GROUP_DM_UPDATED = "group_dm_updated",
   VOICE_JOINED = "voice_joined",
   VOICE_LEFT = "voice_left",
 }

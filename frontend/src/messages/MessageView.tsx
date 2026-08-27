@@ -8,6 +8,7 @@ import { useAuth } from "../auth/AuthContext";
 import { useUserStore } from "../shared/userStore";
 import Avatar from "../shared/Avatar";
 import ViewHeader from "../shared/ViewHeader";
+import ProfileTrigger from "../profile/ProfileTrigger";
 
 /** Messages from the same person within this window share one header. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -102,18 +103,21 @@ function MessageRow({
           {timeLabel(message.created_at)}
         </span>
       ) : (
-        <Avatar
-          name={authorName}
-          seed={message.sender_id}
-          size="sm"
-          className="mt-0.5"
-        />
+        <ProfileTrigger
+          userId={message.sender_id}
+          label={authorName ? `View ${authorName}` : "View profile"}
+          className="mt-0.5 self-start"
+        >
+          <Avatar name={authorName} seed={message.sender_id} size="sm" />
+        </ProfileTrigger>
       )}
 
       <div className="min-w-0 flex-1">
         {!grouped && (
           <p className="mb-0.5 flex items-baseline gap-2">
-            <span className="text-sm font-semibold text-white">{label}</span>
+            <ProfileTrigger userId={message.sender_id}>
+              <span className="text-sm font-semibold text-white">{label}</span>
+            </ProfileTrigger>
             <span className="font-mono text-[10px] text-ink-500">
               {timeLabel(message.created_at)}
             </span>
@@ -134,6 +138,12 @@ export interface MessageViewProps {
   icon?: React.ReactNode;
   subtitle?: string;
   actions?: React.ReactNode;
+  /**
+   * Slot directly above the composer. The DM views put the call bar here so it
+   * sits with the controls rather than in the scrolling message list, where it
+   * would drift out of view mid-call.
+   */
+  aboveComposer?: React.ReactNode;
 }
 
 /**
@@ -146,6 +156,7 @@ export function MessageView({
   icon,
   subtitle,
   actions,
+  aboveComposer,
 }: MessageViewProps) {
   const { getChannelMessages, fetchChannelMessages } = useMessageStore();
   const { fetchUsers } = useUserStore();
@@ -280,6 +291,8 @@ export function MessageView({
           )
         )}
       </div>
+
+      {aboveComposer}
 
       <div className="shrink-0 px-3 pb-4 pt-2 sm:px-6">
         {sendError && <p className="mb-2 text-xs text-amber-300">{sendError}</p>}

@@ -1,0 +1,135 @@
+# CI for Project Rain.
+#
+# Production builds its images on the VPS, so until this existed nothing
+# verified a build before it was deployed and a broken `git pull && up --build`
+# was discovered at deploy time. That is what these three jobs are for.
+#
+# They run in parallel because they fail for different reasons: `checks` for a
+# unit-level regression, `frontend` for a type or lint error, `e2e` for a break
+# in the seam between services, which is where this project's bugs actually
+# live.
+#
+# Env files are generated rather than committed. `generate_env_files.py` is the
+# only writer of them, so CI exercises it too: if it emits an inconsistent
+# deployment, `check_config.py` fails here rather than on the box.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: Backend unit tests and config
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Stdlib only, so these two run before anything is installed.
+      - name: Write dev env files
+        run: python -c "import generate_env_files as g; g.main()"
+
+      - name: Cross-service config check
+        run: python check_config.py --dev
+
+      - name: check_config tests
+        run: python -m unittest discover -s backend/tests/unit -v
+
+      - name: Install backend packages
+        run: |
+          pip install "./backend/libs[db]"
+          pip install -r backend/rest_api/requirements.txt
+          pip install -r backend/event_consumer/requirements.txt
+
+      - name: libs tests
+        run: python -m unittest discover -s backend/libs/tests -v
+
+      - name: rest_api tests
+        # No database: conftest deliberately skips the lifespan. The settings
+        # object is built at import time though, so it needs the env values.
+        run: |
+          set -a
+          . ./rest_api.dev.env
+          set +a
+          cd backend/rest_api
+          python -m pytest tests -q
+
+      - name: event_consumer tests
+        run: |
+          cd backend/event_consumer
+          python -m unittest discover -s tests -v
+
+  frontend:
+    name: Frontend lint and build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Write frontend/.env
+        # Vite inlines VITE_* at build time, so the landing page's links have
+        # to exist before `npm run build`, not at runtime.
+        working-directory: .
+        run: python -c "import generate_env_files as g; g.write_frontend_env()"
+
+      - run: npm ci
+
+      - run: npm run lint
+
+      # `npm run build` is `tsc -b && vite build`, so this is the typecheck too.
+      - run: npm run build
+
+  e2e:
+    name: End to end against a live stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Write dev env files
+        run: python -c "import generate_env_files as g; g.main()"
+
+      - name: Write the dev Caddyfile
+        # The real Caddyfile is gitignored because prod's carries a hostname.
+        run: cp Caddyfile.dev.example Caddyfile
+
+      - name: Start the stack
+        run: docker compose up -d --build --wait --wait-timeout 420
+
+      - name: Alembic drift check
+        # rest_api is the only migrator, and this fails if the models and the
+        # migrations disagree. Cheap here, painful when found on the box.
+        run: docker compose exec -T rest_api alembic check
+
+      - name: Smoke suite
+        # Stdlib only. The websocket, realtime and voice probes run inside the
+        # ws_gateway container, which is where the compose network is.
+        run: python backend/tests/e2e/smoke.py
+
+      - name: Service logs
+        if: failure()
+        run: docker compose logs --no-color --tail 200
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v

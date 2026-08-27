@@ -344,6 +344,19 @@ async def reset_demo_state(db: AsyncSession) -> User:
     )
     await _delete_channels(db, list(set(stray_dms.scalars().all())))
 
+    # --- group DMs, all of them -------------------------------------------
+    # The seed creates none, so every group the demo account is in was made by
+    # a visitor. Unlike a two-person DM there is no "with the seeded cast"
+    # exception to carve out: a group with demo_ada in it is still one visitor's
+    # room, and leaving it would show it to the next.
+    stray_groups = await db.execute(
+        select(Channel.id).where(
+            Channel.type == ChannelType.GROUP_DM,
+            Channel.id.in_(demo_channel_ids),
+        )
+    )
+    await _delete_channels(db, list(set(stray_groups.scalars().all())))
+
     # --- friendships and requests outside the seeded cast -----------------
     await db.execute(
         delete(Friendship).where(

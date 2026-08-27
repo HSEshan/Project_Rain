@@ -3,6 +3,12 @@ import os
 from enum import Enum
 from pathlib import Path
 
+from libs.event.shards import (
+    DEFAULT_NUM_SHARDS,
+    LEGACY_SHARD_COUNT_ENV,
+    SHARD_COUNT_ENV,
+)
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -27,12 +33,24 @@ class SettingsFactory(BaseSettings):
     SUPERUSER_PASSWORD: str
     DOCS: bool
 
-    # Realtime publishing. NUM_SHARDS must match the gateway's NUM_SHARDS and
-    # the consumer/lease manager's NUM_STREAMS.
     REDIS_HOST: str = "redis"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
-    NUM_SHARDS: int = 16
+
+    # Realtime publishing. This must equal the gateway's and the lease
+    # manager's, or events land on shards nobody leases and are discarded in
+    # silence. `NUM_STREAMS` is the deprecated spelling, still accepted so an
+    # env file written before the rename keeps working (libs.event.shards).
+    #
+    # The default is the sharp edge: an env file that omits the line entirely
+    # gets 16 while the rest of the deployment runs 2, and nothing looks wrong.
+    # It stays because making it required turns a missing line into a
+    # crash-loop on deploy. `register_shard_count` catches the disagreement at
+    # startup instead, and `check_config.py` catches it before the deploy.
+    NUM_SHARDS: int = Field(
+        default=DEFAULT_NUM_SHARDS,
+        validation_alias=AliasChoices(SHARD_COUNT_ENV, LEGACY_SHARD_COUNT_ENV),
+    )
 
     # Demo account. Off by default so a fresh or private deployment does not
     # silently expose a tokenless login route; the seeder only runs when this

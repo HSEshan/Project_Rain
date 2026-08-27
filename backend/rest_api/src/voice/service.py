@@ -1,6 +1,6 @@
 import structlog
 from fastapi import Depends
-from libs.db import Channel, ChannelType, User
+from libs.db import CALLABLE_CHANNEL_TYPES, Channel, User
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.utils import CurrentUser
@@ -147,9 +147,15 @@ class VoiceService(BaseService):
         channel = result.scalar_one_or_none()
         if not channel:
             raise NotFoundException("Channel not found")
-        if channel.type != ChannelType.GUILD_VOICE:
-            # DM and group calls are explicitly out of scope for v1. They can
-            # reuse these rooms later without any protocol change.
+        if channel.type not in CALLABLE_CHANNEL_TYPES:
+            # Guild *text* channels are the only exclusion. DMs and group DMs
+            # became callable on 2026-08-25 and needed no protocol change at
+            # all: the room id is still the channel id, the membership that
+            # authorises the join is still `ChannelMember`, and presence still
+            # rides the same channel-addressed VOICE_STATE event. The single
+            # difference is upstairs, in the UI: a guild voice channel is a
+            # place you walk into, and a DM call is something that starts and
+            # has to be announced to the other side.
             raise ForbiddenException("This channel is not a voice channel")
         return channel
 

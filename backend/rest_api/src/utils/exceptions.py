@@ -8,6 +8,13 @@ class NotFoundException(HTTPException):
         super().__init__(status_code=status.HTTP_404_NOT_FOUND, detail=detail)
 
 
+class BadRequestException(HTTPException):
+    """The request is well-formed but asks for something that cannot be done."""
+
+    def __init__(self, detail: str = "Bad request"):
+        super().__init__(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+
 class AlreadyExistsException(HTTPException):
     """Base exception for resource already exists errors."""
 

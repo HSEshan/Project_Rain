@@ -6,6 +6,7 @@ import { useChannelStore } from "../shared/channelStore";
 import { useUserStore } from "../shared/userStore";
 import FriendRequestList from "./FriendRequestList";
 import Avatar from "../shared/Avatar";
+import ProfileTrigger from "../profile/ProfileTrigger";
 import Badge from "../shared/Badge";
 import { Button } from "../shared/Button";
 import EmptyState from "../shared/EmptyState";
@@ -101,13 +102,18 @@ export default function FriendsPage() {
                       key={friend.id}
                       className="group flex items-center gap-3 rounded-2xl border border-white/[0.05] bg-white/[0.02] px-4 py-3 transition-colors hover:border-white/10 hover:bg-white/[0.04]"
                     >
-                      <Avatar name={friend.username} seed={friend.id} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-medium text-ink-100">
-                          {friend.username}
+                      <ProfileTrigger
+                        userId={friend.id}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        <Avatar name={friend.username} seed={friend.id} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium text-ink-100">
+                            {friend.username}
+                          </span>
+                          <span className="text-xs text-ink-500">Friend</span>
                         </span>
-                        <span className="text-xs text-ink-500">Friend</span>
-                      </span>
+                      </ProfileTrigger>
                       <Button
                         size="sm"
                         icon={<FiMessageCircle size={14} />}

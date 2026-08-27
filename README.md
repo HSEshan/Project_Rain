@@ -2,12 +2,15 @@
 
 **Live demo:** https://voice.eshanhs.dev
 
-A self-hosted chat platform in the shape of Discord: direct messages, friends,
-guilds with text and voice channels, and a realtime event pipeline built to
-survive more than one gateway instance.
+A self-hosted chat platform in the shape of Discord: direct messages, group
+DMs, friends, profile cards, guilds with text and voice channels, calls inside a
+DM, and a realtime event pipeline built to survive more than one gateway
+instance.
 
 Voice runs on a self-hosted LiveKit SFU and has been tested between two people
-in different states for a two-hour session.
+in different states for a two-hour session. A call in a DM uses the same rooms:
+the room id is the channel id, so the membership that lets you into a guild
+voice channel is the same membership that lets you call a friend.
 
 ## Architecture
 
@@ -38,7 +41,7 @@ to the SFU, and only presence ("X joined voice") travels the event pipeline.
 | `livekit` | Self-hosted SFU carrying voice channel audio. |
 | `frontend` | React 19 + Vite 7 + TypeScript + Zustand + Tailwind. |
 
-`rest_api` and `ws_gateway` import their ORM models from `libs.db` — one
+`rest_api` and `ws_gateway` import their ORM models from `libs.db` - one
 definition, one engine configuration. `event_consumer` and `lease_manager`
 install `libs` without the `db` extra and never touch Postgres.
 
@@ -77,13 +80,13 @@ frontend, edge.
 ## Voice
 
 Guild voice channels connect to a self-hosted LiveKit SFU. `rest_api` is the
-gatekeeper — it mints a join token only for a member of a `guild_voice`
-channel — and the LiveKit room name is the channel id.
+gatekeeper - it mints a join token only for a member of a `guild_voice`
+channel - and the LiveKit room name is the channel id.
 
 To try it with two people, invite someone with "+ Invite people" in a guild's
 channel bar; the invitation appears for them on `/guild`. Two browser windows
 on one machine need **separate sessions** (a second browser, or a private
-window) — the login token is a cookie, and LiveKit allows one connection per
+window) - the login token is a cookie, and LiveKit allows one connection per
 identity per room, so two windows signed in as the same user would evict each
 other.
 
@@ -95,7 +98,7 @@ anyone. `livekit.dev.yaml` is the development config; copy
 advertise a real external address rather than the dev config's loopback.
 
 Who is in a voice channel comes from LiveKit, through signed webhooks to
-`POST /voice/webhook` — the browser never reports its own presence, because one
+`POST /voice/webhook` - the browser never reports its own presence, because one
 that refreshes or crashes would never get to say it left. `webhook.urls` must
 therefore be set in the LiveKit config, or the participant lists stay empty.
 
@@ -118,7 +121,7 @@ must be imported in `libs/libs/db/models/__init__.py` or it will be invisible.
 
 A database created before Alembic existed (by the old `create_all` path) is
 detected at startup, stamped with the initial revision, and then upgraded
-normally — no manual step.
+normally - no manual step.
 
 ## Tests
 
@@ -126,10 +129,10 @@ normally — no manual step.
 python backend/tests/e2e/smoke.py
 ```
 
-End to end against a running stack, stdlib only (no host virtualenv needed —
+End to end against a running stack, stdlib only (no host virtualenv needed -
 it shells out to the `docker` CLI). Covers register → friend request → DM →
 guild → invite → member removal, the websocket round trip, multiple sockets per
-user, realtime delivery of REST mutations, and voice — including having LiveKit
+user, realtime delivery of REST mutations, and voice - including having LiveKit
 itself validate a minted token and accept a signalling connection. It writes
 real rows to the dev database.
 
@@ -146,6 +149,50 @@ docker compose run --rm --no-deps event_consumer python -m unittest discover -s 
 Unit tests for the consumer's gRPC endpoint cache. Stdlib `unittest`, so that
 image needs no test dependency.
 
+```bash
+python -m unittest discover -s backend/tests/unit
+```
+
+Tests for the `check_config.py` ops script. Stdlib only, so this one needs
+nothing installed at all.
+
+```bash
+python -m unittest discover -s backend/libs/tests
+```
+
+Shard count resolution and the startup agreement check. Needs `libs` importable
+(`pip install ./backend/libs`), or run it in a service image.
+
+CI runs all of the above plus the frontend lint and build on every push and pull
+request: `.github/workflows/ci.yml`.
+
+## Configuration
+
+Env files are generated, never committed:
+
+```bash
+python generate_env_files.py
+```
+
+Several settings have to agree across files that no single service can see both
+halves of. `check_config.py` compares them:
+
+```bash
+python check_config.py
+```
+
+It checks the shard count (`NUM_SHARDS` in rest_api, ws_gateway and
+lease_manager), the JWT `SECRET_KEY` that rest_api signs with and ws_gateway
+verifies, the Postgres credentials, the LiveKit API key pair and webhook key,
+and the Redis coordinates. Values are compared, never printed, so the output is
+safe to paste into an issue. It picks `*.env` when they exist and `*.dev.env`
+otherwise; `--dev` and `--prod` force the choice. Stdlib only, so it runs on the
+VPS with nothing installed.
+
+`NUM_STREAMS` is the old name for `NUM_SHARDS`. Both still work and the new one
+wins, so an env file written before the rename keeps running; the alias will be
+dropped in a later release.
+
 ## Deployment
 
 `docker-compose-prod.yml` builds the images on the target host and runs Caddy as
@@ -154,5 +201,5 @@ terminating TLS in front of it (`nginx.conf.example`). Generate the production
 env files with `python generate_env_files.py --prod`.
 
 LiveKit media needs **7882/udp** (and 7881/tcp as a fallback) open on both the
-host firewall and the provider's security group — no reverse proxy can carry it,
+host firewall and the provider's security group - no reverse proxy can carry it,
 and a closed port fails as "voice connects, then nobody can hear anyone".

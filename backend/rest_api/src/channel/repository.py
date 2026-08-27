@@ -2,7 +2,7 @@ from collections import defaultdict
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from libs.db import Channel, ChannelMember, ChannelType
+from libs.db import Channel, ChannelMember, ChannelType, User
 from src.channel.schemas import DMChannelCreate
 from src.utils.exceptions import NotFoundException
 
@@ -56,6 +56,48 @@ class ChannelRepository:
         if not result:
             raise NotFoundException("You are not a member of this channel")
         return result
+
+    @staticmethod
+    async def remove_user_from_channel(
+        db: AsyncSession, channel_id: str, user_id: str
+    ) -> None:
+        member = await db.execute(
+            select(ChannelMember).where(
+                ChannelMember.channel_id == channel_id,
+                ChannelMember.user_id == user_id,
+            )
+        )
+        row = member.scalar_one_or_none()
+        if row:
+            await db.delete(row)
+            await db.flush()
+
+    @staticmethod
+    async def get_channel_member_ids(db: AsyncSession, channel_id: str) -> list[str]:
+        """Everyone in the channel, oldest membership first.
+
+        The order is what decides who inherits a group DM when its owner
+        leaves, so it is not incidental.
+        """
+        members = await db.execute(
+            select(ChannelMember.user_id)
+            .where(ChannelMember.channel_id == channel_id)
+            .order_by(ChannelMember.joined_at)
+        )
+        return [str(user_id) for user_id in members.scalars().all()]
+
+    @staticmethod
+    async def get_channel_members_with_usernames(
+        db: AsyncSession, channel_id: str
+    ) -> list[tuple[str, str]]:
+        """(user_id, username) for each member, oldest membership first."""
+        members = await db.execute(
+            select(ChannelMember.user_id, User.username)
+            .join(User, User.id == ChannelMember.user_id)
+            .where(ChannelMember.channel_id == channel_id)
+            .order_by(ChannelMember.joined_at)
+        )
+        return [(str(user_id), username) for user_id, username in members.all()]
 
     @staticmethod
     async def get_channels_by_guild_ids(

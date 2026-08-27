@@ -91,7 +91,9 @@ LOG_FORMAT=pretty
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_DB=0
-NUM_STREAMS=2
+# No shard count here on purpose: event_consumer discovers its shards from the
+# leases hash, so it never needs one. NUM_SHARDS belongs to rest_api,
+# ws_gateway and lease_manager, and all three must carry the same value.
 REDIS_XREAD_COUNT=100
 REDIS_XREAD_BLOCK=25
 CONSUMER_GROUP=grpc_group
@@ -110,7 +112,7 @@ LOG_FORMAT=pretty
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_DB=0
-NUM_STREAMS=2
+NUM_SHARDS=2
             """.strip()
         )
     write_frontend_env()
@@ -225,7 +227,9 @@ GRPC_ADVERTISE_HOST=""",
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_DB=0
-NUM_STREAMS=2
+# No shard count here on purpose: event_consumer discovers its shards from the
+# leases hash, so it never needs one. NUM_SHARDS belongs to rest_api,
+# ws_gateway and lease_manager, and all three must carry the same value.
 REDIS_XREAD_COUNT=100
 REDIS_XREAD_BLOCK=25
 CONSUMER_GROUP=grpc_group
@@ -236,7 +240,7 @@ MAX_GRPC_CONNECTIONS=100""",
 REDIS_HOST=redis
 REDIS_PORT=6379
 REDIS_DB=0
-NUM_STREAMS=2""",
+NUM_SHARDS=2""",
         "postgres.env": f"""POSTGRES_USER=rain
 POSTGRES_PASSWORD={postgres_password}
 POSTGRES_DB=raindb""",
@@ -250,8 +254,9 @@ POSTGRES_DB=raindb""",
     write_frontend_env()
 
     print(
-        "\nNUM_SHARDS (ws_gateway) and NUM_STREAMS (consumer, lease manager) "
-        "must stay equal - both are 2 above.\n"
+        "\nNUM_SHARDS must stay equal across rest_api, ws_gateway and "
+        "lease_manager - all three are 2 above. Run `python check_config.py` "
+        "after any hand edit.\n"
         "Next: copy livekit.example.yaml to livekit.yaml and set its "
         f"`webhook.api_key` to {livekit_api_key}."
     )

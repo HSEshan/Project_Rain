@@ -5,6 +5,7 @@ import { useUserStore } from "../shared/userStore";
 import { useUiStore } from "../shared/uiStore";
 import { GuildMemberRole } from "./types";
 import Avatar from "../shared/Avatar";
+import ProfileTrigger from "../profile/ProfileTrigger";
 
 /**
  * Guild members. A permanent third column from `xl` up; below that it is a
@@ -37,23 +38,25 @@ export default function GuildMembersBar({ guildId }: { guildId: string }) {
         </p>
         <ul className="space-y-0.5">
           {list.map((member) => (
-            <li
-              key={member.user_id}
-              className="flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-white/[0.04]"
-            >
-              <Avatar
-                name={getUserFromStore(member.user_id)?.username}
-                seed={member.user_id}
-                size="sm"
-              />
-              <span className="min-w-0 flex-1 truncate text-sm text-ink-200">
-                {getUserFromStore(member.user_id)?.username ?? "…"}
-              </span>
-              {member.role === GuildMemberRole.ADMIN && (
-                <span className="rounded-md bg-rain-400/15 px-1.5 py-0.5 text-[10px] font-medium text-rain-300">
-                  admin
+            <li key={member.user_id}>
+              <ProfileTrigger
+                userId={member.user_id}
+                className="flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-white/[0.04]"
+              >
+                <Avatar
+                  name={getUserFromStore(member.user_id)?.username}
+                  seed={member.user_id}
+                  size="sm"
+                />
+                <span className="min-w-0 flex-1 truncate text-sm text-ink-200">
+                  {getUserFromStore(member.user_id)?.username ?? "…"}
                 </span>
-              )}
+                {member.role === GuildMemberRole.ADMIN && (
+                  <span className="rounded-md bg-rain-400/15 px-1.5 py-0.5 text-[10px] font-medium text-rain-300">
+                    admin
+                  </span>
+                )}
+              </ProfileTrigger>
             </li>
           ))}
         </ul>

@@ -21,6 +21,8 @@ import GuildChannelCreateModal from "./guild/GuildChannelCreateModal";
 import GuildInviteModal from "./guild/GuildInviteModal";
 import GuildInviteInboxModal from "./guild/GuildInviteInboxModal";
 import TourOverlay from "./tour/TourOverlay";
+import GroupDMCreateModal from "./messages/GroupDMCreateModal";
+import ProfileCard from "./profile/ProfileCard";
 
 function MainLayout() {
   return (
@@ -42,6 +44,10 @@ function MainLayout() {
         <GuildChannelCreateModal />
         <GuildInviteModal />
         <GuildInviteInboxModal />
+        <GroupDMCreateModal />
+        {/* Opened from anywhere a username appears, so it mounts with the
+            other modals rather than inside any one view. */}
+        <ProfileCard />
 
         {/* Above the modals: it spotlights the app chrome, so it has to be
             able to dim anything that is already open. */}

@@ -1,6 +1,8 @@
 import os
 import socket
 
+from libs.event.shards import LEGACY_SHARD_COUNT_ENV, SHARD_COUNT_ENV
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -10,7 +12,14 @@ class Settings(BaseSettings):
     REDIS_DB: int
     DEFAULT_TTL_SECONDS: int
 
-    NUM_SHARDS: int
+    # Must equal rest_api's and the lease manager's, or events land on shards
+    # nobody leases. Required here on purpose: the gateway is a publisher, and
+    # its env files have always carried the line. `NUM_STREAMS` is the
+    # deprecated spelling, still accepted (libs.event.shards).
+    NUM_SHARDS: int = Field(
+        validation_alias=AliasChoices(SHARD_COUNT_ENV, LEGACY_SHARD_COUNT_ENV),
+    )
+
     BATCH_SIZE: int
     BATCH_INTERVAL_MS: int
 
