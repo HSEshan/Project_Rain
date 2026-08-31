@@ -82,6 +82,20 @@ def register(tag):
     return {"id": created["id"], "username": username, "token": token}
 
 
+def login_form(username, password):
+    """POST /auth/login, which takes an OAuth2 password form rather than JSON."""
+    form = urllib.parse.urlencode(
+        {"username": username, "password": password}
+    ).encode()
+    req = urllib.request.Request(BASE + "/auth/login", data=form, method="POST")
+    req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return resp.status, json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read().decode() or "null")
+
+
 def psql(statement: str) -> bool:
     """Run SQL against the dev database, for row shapes REST cannot create.
 
@@ -150,6 +164,106 @@ status, _ = call("GET", f"/users/?user_id={bob['id']}")
 check("GET /users/ requires auth", status == 401, f"got {status}")
 status, _ = call("POST", "/users/bulk", {"ids": [bob["id"]]})
 check("POST /users/bulk requires auth", status == 401, f"got {status}")
+
+print("== auth failures say what went wrong ==")
+# The frontend renders these verbatim. They were unreachable for a while: the
+# api client caught the axios error and rethrew a bare Error, so every failure
+# here reached the user as "Cannot reach the server". These assertions are
+# about the *shape* the client depends on, not just the status code.
+
+status, body = call(
+    "POST",
+    "/auth/register",
+    {
+        "username": alice["username"],
+        "email": f"different_{uuid.uuid4().hex[:8]}@example.com",
+        "password": "Passw0rd!23",
+    },
+)
+check("duplicate username is 409", status == 409, f"got {status}")
+check(
+    "duplicate username says which field",
+    isinstance((body or {}).get("detail"), str)
+    and "username" in body["detail"].lower(),
+    str(body),
+)
+
+status, body = call(
+    "POST",
+    "/auth/register",
+    {
+        "username": f"different_{uuid.uuid4().hex[:8]}",
+        "email": f"{alice['username']}@example.com",
+        "password": "Passw0rd!23",
+    },
+)
+check("duplicate email is 409", status == 409, f"got {status}")
+check(
+    "duplicate email says which field",
+    isinstance((body or {}).get("detail"), str) and "email" in body["detail"].lower(),
+    str(body),
+)
+
+weak = f"weak_{uuid.uuid4().hex[:8]}"
+status, body = call(
+    "POST",
+    "/auth/register",
+    # A password made of a word that appears in no error message, so the
+    # "does not echo it back" check below cannot pass by coincidence.
+    {"username": weak, "email": f"{weak}@example.com", "password": "sentinelvalue"},
+)
+check("a weak password is 422", status == 422, f"got {status}")
+password_errors = [
+    error
+    for error in (body or {}).get("detail", [])
+    if isinstance(error, dict) and error.get("loc", [])[-1:] == ["password"]
+]
+check("the 422 names the password field", len(password_errors) == 1, str(body))
+message = (password_errors or [{}])[0].get("msg", "")
+check(
+    "the password message is a sentence, not a stringified list",
+    "['" not in message and "']" not in message,
+    message,
+)
+check(
+    "the password message names every missing requirement",
+    all(
+        requirement in message
+        for requirement in ("uppercase letter", "number", "special character")
+    ),
+    message,
+)
+
+# The submitted value used to come back in `input`, which for this route is a
+# plaintext password in an error body. `validation_error_handler` drops it.
+check(
+    "the 422 does not echo the password back",
+    "sentinelvalue" not in json.dumps(body),
+    str(body),
+)
+
+status, body = call(
+    "POST",
+    "/auth/register",
+    {"username": "no spaces allowed!", "email": "not-an-email", "password": "short"},
+)
+fields = [
+    error.get("loc", [])[-1]
+    for error in (body or {}).get("detail", [])
+    if isinstance(error, dict)
+]
+check(
+    "every bad field is reported at once, not one per attempt",
+    sorted(fields) == ["email", "password", "username"],
+    str(fields),
+)
+
+# Sign-in: the client collapses both of these into one message on purpose, so
+# that the form does not become an oracle for which emails have accounts.
+status, _ = login_form("nobody@nowhere.example", "Passw0rd!23")
+check("an unknown account cannot sign in", status in (401, 404), f"got {status}")
+status, _ = login_form(f"{alice['username']}@example.com", "Wr0ng!pass")
+check("a wrong password cannot sign in", status == 401, f"got {status}")
 
 print("== friend requests ==")
 status, _ = call(

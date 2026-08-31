@@ -57,7 +57,9 @@ export default function SignupForm({ onDone }: { onDone: () => void }) {
         }
       })
       .catch((err: unknown) => {
-        setFormError(errorText(err, "Could not create that account."));
+        setFormError(
+          errorText(err, "Could not create that account. Try again.")
+        );
       })
       .finally(() => setSubmitting(false));
   };

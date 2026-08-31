@@ -1,61 +1,34 @@
-import { AxiosError, type AxiosResponse } from "axios";
+import { type AxiosResponse } from "axios";
 import apiClient from "../utils/apiClientBase";
+
+/**
+ * Both of these deliberately let the axios error through untouched.
+ *
+ * They used to catch it and rethrow `new Error("User already exists")`, which
+ * reads like an improvement and is the opposite: the new error carries no
+ * `response`, so `errorText` could not see the status or the server's `detail`
+ * and fell through to its no-response branch. Every failed signup and login
+ * said "Cannot reach the server. Check your connection.", including a taken
+ * username and a password that failed validation.
+ *
+ * The transport layer's job is to make the request. Deciding what a person
+ * should read about a 409 belongs in one place, `shared/errors.ts`, not spread
+ * across every api client that happens to know a status code.
+ */
 
 export const postLogin = async (
   username: string,
   password: string
-): Promise<AxiosResponse> => {
-  try {
-    const res = await apiClient.post(
-      "/auth/login",
-      new URLSearchParams({
-        username: username,
-        password: password,
-      }),
-      {
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }
-    );
-    return res;
-  } catch (err: unknown) {
-    console.error("Failed to login", err);
-    if (err instanceof AxiosError) {
-      if (err.response?.status === 404) {
-        throw new Error("User not found");
-      }
-      if (err.response?.status === 401) {
-        throw new Error("Incorrect password");
-      }
-    }
-    throw new Error("An unknown error occurred, " + err);
-  }
-};
+): Promise<AxiosResponse> =>
+  apiClient.post(
+    "/auth/login",
+    new URLSearchParams({ username, password }),
+    { headers: { "Content-Type": "application/x-www-form-urlencoded" } }
+  );
 
 export const postSignup = async (
   username: string,
   email: string,
   password: string
-): Promise<AxiosResponse> => {
-  try {
-    const res = await apiClient.post("/auth/register", {
-      username,
-      email,
-      password,
-    });
-    return res;
-  } catch (err: unknown) {
-    if (err instanceof AxiosError) {
-      if (err.response?.status === 409) {
-        throw new Error("User already exists");
-      }
-    }
-    if (err instanceof AxiosError) {
-      if (err.response?.status === 400) {
-        throw new Error("Invalid credentials");
-      }
-    }
-    throw new Error("An unknown error occurred, " + err);
-  }
-};
+): Promise<AxiosResponse> =>
+  apiClient.post("/auth/register", { username, email, password });

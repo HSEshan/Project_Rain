@@ -5,7 +5,7 @@ import type { AxiosResponse } from "axios";
 import { useAuth } from "../auth/AuthContext";
 import { Button } from "../shared/Button";
 import { Input } from "../shared/Input";
-import { errorText } from "../shared/errors";
+import { loginErrorText } from "../shared/errors";
 import { postLogin } from "./apiClient";
 
 export default function LoginForm() {
@@ -34,7 +34,7 @@ export default function LoginForm() {
         }
       })
       .catch((err: unknown) => {
-        setError(errorText(err, "Could not sign you in."));
+        setError(loginErrorText(err));
       })
       .finally(() => setLoggingIn(false));
   };
