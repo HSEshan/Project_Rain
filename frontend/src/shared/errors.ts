@@ -113,10 +113,10 @@ export function errorText(error: unknown, fallback: string): string {
 /**
  * Sign-in copy, where being specific would be the wrong thing to do.
  *
- * The API answers 404 for an unknown account and 401 for a bad password, so
- * repeating either verbatim turns the login form into an oracle for which
- * email addresses have accounts. One message for both. (The status codes still
- * differ, which is a separate finding: see tasks.md.)
+ * The API answers 401 for both an unknown account and a bad password (it used
+ * to answer 404 for the first, which let anyone test whether an email had an
+ * account). 404 is still collapsed here so that an older server, or a proxy
+ * that rewrites the status, cannot reintroduce the leak in the copy.
  */
 export function loginErrorText(error: unknown): string {
   const status = (error as ApiError)?.response?.status;

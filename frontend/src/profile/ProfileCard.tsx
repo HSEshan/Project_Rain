@@ -8,6 +8,7 @@ import Spinner from "../shared/Spinner";
 import { errorText } from "../shared/errors";
 import { createFriendRequest } from "../friends/apiClient";
 import { useProfileStore } from "./profileStore";
+import ProfileBio from "./ProfileBio";
 import { FriendState } from "./apiClient";
 
 const JOINED = (iso: string) =>
@@ -80,6 +81,11 @@ export default function ProfileCard() {
               </p>
             </div>
           </div>
+
+          <ProfileBio
+            profile={profile}
+            editable={profile.friend_state === FriendState.SELF}
+          />
 
           {profile.mutual_guilds.length > 0 && (
             <div>

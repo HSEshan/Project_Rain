@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
+from src.auth.cookies import set_refresh_cookie
 from src.demo.schemas import DemoSession, DemoStatus
 from src.demo.service import DemoService, get_demo_service
 
@@ -18,9 +19,14 @@ async def get_demo_status(demo_service: DemoService = Depends(get_demo_service))
 
 
 @router.post("/login", response_model=DemoSession, status_code=status.HTTP_200_OK)
-async def login_as_demo(demo_service: DemoService = Depends(get_demo_service)):
+async def login_as_demo(
+    response: Response, demo_service: DemoService = Depends(get_demo_service)
+):
     """Reset the demo account and return a token for it.
 
-    503 when `DEMO_ENABLED` is false.
+    503 when `DEMO_ENABLED` is false. Sets the same refresh cookie a real
+    sign-in does, so a demo session renews itself like any other.
     """
-    return await demo_service.login()
+    body, session = await demo_service.login()
+    set_refresh_cookie(response, session.refresh_token, session.refresh_expires_at)
+    return body

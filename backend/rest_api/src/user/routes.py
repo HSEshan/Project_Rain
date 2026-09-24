@@ -5,6 +5,7 @@ from src.user.schemas import (
     BulkUserResponse,
     UserProfile,
     UserResponse,
+    UserUpdate,
 )
 from src.user.service import UserService, get_user_service
 
@@ -29,6 +30,25 @@ async def get_users_by_ids(
     user_service: UserService = Depends(get_user_service),
 ):
     return await user_service.get_users_by_ids(request)
+
+
+# Declared before `/{user_id}/profile` so the literal wins the match. FastAPI
+# resolves in declaration order and `me` is a valid uuid-shaped path segment as
+# far as the router is concerned; the two do not collide today because the
+# methods differ, and they will the moment either grows a sibling.
+@router.patch("/me", response_model=UserProfile)
+async def update_me(
+    update: UserUpdate,
+    current_user: user_dependency,
+    user_service: UserService = Depends(get_user_service),
+):
+    """Edit your own profile.
+
+    `me` rather than an id in the path: the only account anyone may edit is the
+    one their token names, and a route that cannot express any other target
+    cannot fail to check which one it was given.
+    """
+    return await user_service.update_me(current_user.id, update)
 
 
 @router.get("/{user_id}/profile", response_model=UserProfile)

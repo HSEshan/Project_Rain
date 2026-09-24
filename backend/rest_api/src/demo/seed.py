@@ -42,6 +42,7 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.demo.data import (
     DEMO,
+    DEMO_BIO,
     DEMO_EMAIL,
     DEMO_EMAIL_DOMAIN,
     DEMO_GUILD_DESCRIPTION,
@@ -53,7 +54,9 @@ from src.utils.hashing import get_password_hash
 logger = structlog.get_logger()
 
 
-async def _ensure_user(db: AsyncSession, username: str, email: str) -> User:
+async def _ensure_user(
+    db: AsyncSession, username: str, email: str, bio: str | None = None
+) -> User:
     """Get the seeded account for this email, creating it if it is missing.
 
     Email is the lookup key, not username: the address is on a domain nobody
@@ -64,6 +67,11 @@ async def _ensure_user(db: AsyncSession, username: str, email: str) -> User:
     existing = await db.execute(select(User).where(User.email == email))
     user = existing.scalar_one_or_none()
     if user:
+        # Canonical data, so it is re-applied rather than left at whatever a
+        # previous visitor typed. The demo account's own bio is editable by
+        # whoever is signed in to it, and this is what puts it back.
+        if user.bio != bio:
+            user.bio = bio
         return user
 
     taken = await db.execute(select(User.id).where(User.username == username))
@@ -75,6 +83,7 @@ async def _ensure_user(db: AsyncSession, username: str, email: str) -> User:
         id=generate_id(),
         username=username,
         email=email,
+        bio=bio,
         # Deliberately unusable. Nothing stores or transmits this value, so the
         # account cannot be reached through /auth/login.
         password_hash=await get_password_hash(secrets.token_urlsafe(32)),
@@ -143,12 +152,12 @@ async def ensure_demo_data(db: AsyncSession) -> User:
     up before it is created. Does not touch messages, `reset_demo_state` owns
     those.
     """
-    demo_user = await _ensure_user(db, DEMO_USERNAME, DEMO_EMAIL)
+    demo_user = await _ensure_user(db, DEMO_USERNAME, DEMO_EMAIL, DEMO_BIO)
 
     companions: dict[str, User] = {}
     for definition in DEMO.companions:
         companions[definition.username] = await _ensure_user(
-            db, definition.username, definition.email
+            db, definition.username, definition.email, definition.bio
         )
 
     # --- the guild -------------------------------------------------------
@@ -226,7 +235,10 @@ async def ensure_demo_data(db: AsyncSession) -> User:
     # --- one unanswered friend request -----------------------------------
     if DEMO.pending_requester:
         requester = await _ensure_user(
-            db, DEMO.pending_requester.username, DEMO.pending_requester.email
+            db,
+            DEMO.pending_requester.username,
+            DEMO.pending_requester.email,
+            DEMO.pending_requester.bio,
         )
         existing = await db.execute(
             select(FriendRequest).where(

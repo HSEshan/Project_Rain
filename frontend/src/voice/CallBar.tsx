@@ -11,6 +11,7 @@ import { useAuth } from "../auth/AuthContext";
 import Avatar from "../shared/Avatar";
 import { Button } from "../shared/Button";
 import { useUserStore } from "../shared/userStore";
+import VolumeControl from "./VolumeControl";
 import { useVoiceStore } from "./voiceStore";
 
 /**
@@ -110,7 +111,7 @@ export function CallButton({ channelId }: { channelId: string }) {
 /** The strip above the composer. Nothing at all when there is no call. */
 export default function CallBar({ channelId }: { channelId: string }) {
   const { roster, others, inThisCall, names, getUser } = useCallState(channelId);
-  const { leave, toggleMute, toggleDeafen, muted, deafened, error } =
+  const { leave, toggleMute, toggleDeafen, muted, deafened, error, speaking } =
     useVoiceStore();
 
   if (!inThisCall && roster.length === 0) return null;
@@ -134,6 +135,7 @@ export default function CallBar({ channelId }: { channelId: string }) {
               name={getUser(userId)?.username}
               seed={userId}
               size="xs"
+              speaking={speaking[userId] ?? false}
               className="ring-2 ring-ink-950"
             />
           ))}
@@ -177,6 +179,7 @@ export default function CallBar({ channelId }: { channelId: string }) {
             >
               {deafened ? <FiVolumeX size={15} /> : <FiVolume2 size={15} />}
             </button>
+            <VolumeControl compact />
             <button
               onClick={() => void leave()}
               title="Hang up"

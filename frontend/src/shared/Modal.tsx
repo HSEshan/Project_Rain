@@ -48,7 +48,7 @@ export default function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`glass w-full max-w-md rounded-t-3xl border-white/10 bg-ink-850/95 p-6 shadow-lift animate-scale-in sm:rounded-3xl ${className}`}
+        className={`glass max-h-[90dvh] w-full max-w-md overflow-y-auto overscroll-contain rounded-t-3xl border-white/10 bg-ink-850/95 p-6 shadow-lift animate-scale-in sm:rounded-3xl ${className}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-5 flex items-start justify-between gap-4">

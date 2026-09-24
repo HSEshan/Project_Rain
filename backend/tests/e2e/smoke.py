@@ -258,12 +258,206 @@ check(
     str(fields),
 )
 
-# Sign-in: the client collapses both of these into one message on purpose, so
-# that the form does not become an oracle for which emails have accounts.
-status, _ = login_form("nobody@nowhere.example", "Passw0rd!23")
-check("an unknown account cannot sign in", status in (401, 404), f"got {status}")
-status, _ = login_form(f"{alice['username']}@example.com", "Wr0ng!pass")
-check("a wrong password cannot sign in", status == 401, f"got {status}")
+# Sign-in answers the same way whether the account exists or the password is
+# wrong. Two answers let anyone submit an email and read the status code to
+# find out who has an account here.
+unknown_status, unknown_body = login_form("nobody@nowhere.example", "Passw0rd!23")
+wrong_status, wrong_body = login_form(
+    f"{alice['username']}@example.com", "Wr0ng!pass"
+)
+check("an unknown account is 401", unknown_status == 401, f"got {unknown_status}")
+check("a wrong password is 401", wrong_status == 401, f"got {wrong_status}")
+check(
+    "an unknown account and a wrong password are indistinguishable",
+    unknown_body == wrong_body,
+    f"{unknown_body} != {wrong_body}",
+)
+
+print("== refresh tokens ==")
+# Phase 15. The rules being checked are the ones that make rotation worth
+# having rather than a longer login: the refresh token is unreadable to the
+# page, it is spent exactly once, replaying a spent one kills the session, and
+# signing out actually revokes something.
+
+
+def session_call(path, cookie=None, form=None):
+    """A request that can carry and read cookies, which `call` cannot.
+
+    Returns (status, parsed body, list of Set-Cookie header values).
+    """
+    data = urllib.parse.urlencode(form).encode() if form is not None else None
+    req = urllib.request.Request(BASE + path, data=data, method="POST")
+    if form is not None:
+        req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    else:
+        # urllib sends no body for POST without data unless asked
+        req.add_header("Content-Length", "0")
+    if cookie:
+        req.add_header("Cookie", cookie)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            status, payload, headers = resp.status, resp.read().decode(), resp.headers
+    except urllib.error.HTTPError as e:
+        status, payload, headers = e.code, e.read().decode(), e.headers
+    try:
+        parsed = json.loads(payload) if payload else None
+    except json.JSONDecodeError:
+        parsed = payload
+    return status, parsed, headers.get_all("Set-Cookie") or []
+
+
+REFRESH_COOKIE = "rain_refresh"
+
+
+def refresh_set_cookie(set_cookies):
+    for value in set_cookies:
+        if value.startswith(f"{REFRESH_COOKIE}="):
+            return value
+    return None
+
+
+def cookie_value(set_cookie):
+    return set_cookie.split(";")[0].split("=", 1)[1] if set_cookie else None
+
+
+def as_request_cookie(set_cookie):
+    return set_cookie.split(";")[0] if set_cookie else None
+
+
+s_user = f"sess_{uuid.uuid4().hex[:8]}"
+s_password = "Passw0rd!23"
+call(
+    "POST",
+    "/auth/register",
+    {"username": s_user, "email": f"{s_user}@example.com", "password": s_password},
+    expect=201,
+)
+
+status, body, set_cookies = session_call(
+    "/auth/login", form={"username": f"{s_user}@example.com", "password": s_password}
+)
+login_cookie = refresh_set_cookie(set_cookies)
+check("sign-in returns an access token", status == 200 and "access_token" in (body or {}), str(body))
+check("sign-in sets a refresh cookie", login_cookie is not None, str(set_cookies))
+check(
+    "the refresh cookie is httponly, so the page cannot read it",
+    "httponly" in (login_cookie or "").lower(),
+    login_cookie or "",
+)
+check(
+    "the refresh cookie is scoped to the auth routes",
+    "path=/api/auth" in (login_cookie or "").lower(),
+    login_cookie or "",
+)
+hint_cookie = next(
+    (c for c in set_cookies if c.startswith("rain_session=")), None
+)
+check(
+    "sign-in also sets a readable session marker",
+    hint_cookie is not None,
+    "without it every anonymous page load sends a refresh request",
+)
+check(
+    "the marker is readable and carries nothing",
+    hint_cookie is not None
+    and "httponly" not in hint_cookie.lower()
+    and cookie_value(hint_cookie) == "1",
+    hint_cookie or "",
+)
+check(
+    "the refresh token is not in the response body",
+    cookie_value(login_cookie) not in json.dumps(body or {}),
+    "the token the browser must keep private was also returned in the body",
+)
+
+first_access = (body or {}).get("access_token")
+status, refreshed, set_cookies = session_call(
+    "/auth/refresh", cookie=as_request_cookie(login_cookie)
+)
+second_cookie = refresh_set_cookie(set_cookies)
+check("refresh returns a new access token", status == 200, f"got {status} {refreshed}")
+check(
+    "the access token from a refresh works",
+    call("GET", "/channels/me", token=(refreshed or {}).get("access_token"))[0] == 200,
+)
+check("refresh rotates the cookie", second_cookie is not None, str(set_cookies))
+check(
+    "the rotated refresh token is a different token",
+    cookie_value(second_cookie) != cookie_value(login_cookie),
+    "the same refresh token came back, so nothing was rotated",
+)
+check(
+    "the rotated cookie keeps the family's expiry rather than extending it",
+    # A successor inherits `expires_at`, which is what makes the 30 days an
+    # absolute session lifetime instead of an idle timeout.
+    "expires=" in (second_cookie or "").lower(),
+    second_cookie or "",
+)
+
+# Replaying the token that was just spent. Inside the grace window this is two
+# tabs waking together, not theft, and the session must survive it.
+status, _, grace_cookies = session_call(
+    "/auth/refresh", cookie=as_request_cookie(login_cookie)
+)
+check(
+    "replaying a just-rotated token inside the grace window is served, not punished",
+    status == 200,
+    f"got {status}: two tabs refreshing at once would sign the user out",
+)
+grace_cookie = refresh_set_cookie(grace_cookies) or second_cookie
+
+# The same replay, aged past the grace window. Backdating in the database is
+# the only way to test this without sleeping through it in CI.
+if psql(
+    "UPDATE refresh_tokens SET revoked_at = now() - interval '1 hour' "
+    "WHERE revoked_at IS NOT NULL AND user_id = "
+    f"(SELECT id FROM users WHERE username = '{s_user}')"
+):
+    status, _, _ = session_call("/auth/refresh", cookie=as_request_cookie(login_cookie))
+    check("replaying a long-spent token is refused", status == 401, f"got {status}")
+
+    status, _, _ = session_call(
+        "/auth/refresh", cookie=as_request_cookie(grace_cookie)
+    )
+    check(
+        "reuse revokes the whole family, not just the replayed token",
+        status == 401,
+        f"got {status}: the live token survived a detected replay",
+    )
+
+# A fresh session, to check that signing out ends one.
+status, body, set_cookies = session_call(
+    "/auth/login", form={"username": f"{s_user}@example.com", "password": s_password}
+)
+logout_cookie = refresh_set_cookie(set_cookies)
+status, _, cleared = session_call(
+    "/auth/logout", cookie=as_request_cookie(logout_cookie)
+)
+check("logout is 204", status == 204, f"got {status}")
+check(
+    "logout clears the cookie",
+    "max-age=0" in (refresh_set_cookie(cleared) or "").lower(),
+    str(cleared),
+)
+status, _, _ = session_call("/auth/refresh", cookie=as_request_cookie(logout_cookie))
+check(
+    "a signed-out session cannot be refreshed",
+    status == 401,
+    f"got {status}: sign-out did not revoke anything server-side",
+)
+
+status, _, _ = session_call("/auth/refresh")
+check("refresh without a cookie is 401", status == 401, f"got {status}")
+
+status, _, demo_cookies = session_call("/demo/login")
+if status == 200:
+    check(
+        "the demo session gets a refresh cookie too",
+        refresh_set_cookie(demo_cookies) is not None,
+        str(demo_cookies),
+    )
+else:
+    print("  SKIP  demo refresh cookie (DEMO_ENABLED is off)")
 
 print("== friend requests ==")
 status, _ = call(
@@ -629,6 +823,129 @@ status, _ = call("GET", f"/users/{uuid.uuid4()}/profile", token=alice["token"])
 check("unknown user is 404", status == 404, f"got {status}")
 status, _ = call("GET", f"/users/{bob['id']}/profile")
 check("profile requires auth", status == 401, f"got {status}")
+
+print("== profile bio ==")
+# Phase 16. The first route where a user edits themselves, so the checks are as
+# much about what it refuses as what it stores.
+
+status, profile = call("GET", f"/users/{alice['id']}/profile", token=alice["token"])
+check(
+    "a new account has no bio, and null is what that looks like",
+    status == 200 and (profile or {}).get("bio") is None,
+    str(profile),
+)
+
+status, updated = call(
+    "PATCH", "/users/me", {"bio": "Builds things and breaks them."},
+    token=alice["token"], expect=200,
+)
+check(
+    "PATCH /users/me returns the updated profile",
+    (updated or {}).get("bio") == "Builds things and breaks them.",
+    str(updated),
+)
+check(
+    "the update response is a full profile, not a fragment",
+    (updated or {}).get("friend_state") == "self"
+    and "created_at" in (updated or {}),
+    str(updated),
+)
+
+status, seen = call("GET", f"/users/{alice['id']}/profile", token=bob["token"])
+check(
+    "another person sees the bio",
+    (seen or {}).get("bio") == "Builds things and breaks them.",
+    str(seen),
+)
+check("the bio route still hides the email", "email" not in (seen or {}), str(seen))
+
+# A PATCH that does not mention the bio must not erase it. The whole reason the
+# service reads `model_fields_set` rather than trusting pydantic's default.
+status, untouched = call("PATCH", "/users/me", {}, token=alice["token"], expect=200)
+check(
+    "a patch that names no field changes nothing",
+    (untouched or {}).get("bio") == "Builds things and breaks them.",
+    str(untouched),
+)
+
+status, whitespace = call(
+    "PATCH", "/users/me", {"bio": "  padded  \n\n\n\n  and spaced  "},
+    token=alice["token"], expect=200,
+)
+check(
+    "a bio is trimmed and its blank-line runs collapsed",
+    (whitespace or {}).get("bio") == "padded\n\nand spaced",
+    repr((whitespace or {}).get("bio")),
+)
+
+status, stripped = call(
+    "PATCH", "/users/me", {"bio": "before‮after\x07"},
+    token=alice["token"], expect=200,
+)
+check(
+    "control and direction-override characters are removed",
+    (stripped or {}).get("bio") == "beforeafter",
+    repr((stripped or {}).get("bio")),
+)
+
+status, body = call(
+    "PATCH", "/users/me", {"bio": "x" * 191}, token=alice["token"]
+)
+check("an over-long bio is 422", status == 422, f"got {status}")
+message = next(
+    (
+        error.get("msg", "")
+        for error in (body or {}).get("detail", [])
+        if isinstance(error, dict) and error.get("loc", [])[-1:] == ["bio"]
+    ),
+    "",
+)
+check(
+    "the bio message is a sentence naming the limit",
+    "190" in message and "['" not in message,
+    message,
+)
+check(
+    "the 422 does not echo the bio back",
+    "xxxxx" not in json.dumps(body or {}),
+    "the rejected value came back in the error body",
+)
+
+status, exact = call(
+    "PATCH", "/users/me", {"bio": "y" * 190}, token=alice["token"], expect=200
+)
+check(
+    "a bio of exactly the limit is accepted",
+    (exact or {}).get("bio") == "y" * 190,
+    str(status),
+)
+
+status, cleared = call(
+    "PATCH", "/users/me", {"bio": "   "}, token=alice["token"], expect=200
+)
+check(
+    "a blank bio clears it rather than storing an empty string",
+    (cleared or {}).get("bio") is None,
+    repr((cleared or {}).get("bio")),
+)
+status, cleared = call(
+    "PATCH", "/users/me", {"bio": None}, token=alice["token"], expect=200
+)
+check("an explicit null clears it too", (cleared or {}).get("bio") is None, str(cleared))
+
+status, _ = call("PATCH", "/users/me", {"bio": "anonymous"})
+check("PATCH /users/me requires auth", status == 401, f"got {status}")
+
+# There is deliberately no route that edits anyone else, so the closest thing to
+# an authz check is that the path cannot name a victim.
+status, _ = call(
+    "PATCH", f"/users/{bob['id']}", {"bio": "written by alice"}, token=alice["token"]
+)
+check(
+    "there is no route for editing another account",
+    status in (404, 405),
+    f"got {status}",
+)
 
 print("== group dms ==")
 # alice is friends with bob already; carol has to be a friend too, because you

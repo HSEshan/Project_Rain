@@ -70,10 +70,10 @@ class RedisManager:
     async def remove_grpc_endpoint_from_channel(
         self, channel_id: str, grpc_endpoint: str
     ):
+        # Redis deletes a set when its last member is removed. A separate
+        # SCARD + DELETE could land after another gateway's SADD and wipe it.
         key = RediKeys.channel_grpc_endpoints(channel_id)
         await self.redis.srem(key, grpc_endpoint)
-        if await self.redis.scard(key) == 0:
-            await self.redis.delete(key)
 
     async def add_channel_to_user(self, user_id: str, channel_id: str):
         key = RediKeys.user_channels(user_id)
@@ -82,8 +82,6 @@ class RedisManager:
     async def remove_channel_from_user(self, user_id: str, channel_id: str):
         key = RediKeys.user_channels(user_id)
         await self.redis.srem(key, str(channel_id))
-        if await self.redis.scard(key) == 0:
-            await self.redis.delete(key)
 
     async def get_user_channel_ids(self, user_id: str) -> List[str]:
         key = RediKeys.user_channels(user_id)

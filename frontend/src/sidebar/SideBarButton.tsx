@@ -43,9 +43,11 @@ export default function SideBarButton({
       {!!badge && (
         <Badge count={badge} className="absolute -right-1 -top-1" />
       )}
-      {/* Active pill on the rail edge, the way Discord marks the current server */}
+      {/* Active pill on the rail edge, the way Discord marks the current server.
+          Rail only: in the bottom bar there is no edge, and it floats beside
+          the icon as a stray mark. */}
       <span
-        className={`absolute -left-2 h-5 w-1 rounded-r-full bg-rain-400 transition-all duration-200 ${
+        className={`absolute -left-2 hidden h-5 w-1 rounded-r-full bg-rain-400 transition-all duration-200 lg:block ${
           active ? "opacity-100" : "opacity-0 group-hover:opacity-40"
         }`}
       />

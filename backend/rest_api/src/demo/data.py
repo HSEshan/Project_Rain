@@ -23,6 +23,11 @@ DEMO_EMAIL_DOMAIN = "rain.demo"
 DEMO_USERNAME = "demo"
 DEMO_EMAIL = f"{DEMO_USERNAME}@{DEMO_EMAIL_DOMAIN}"
 
+# The visitor's own bio. Their card is the first one they are likely to open
+# (the rail avatar opens it), so it is the one that has to show the feature
+# exists — and it is editable while signed in, which the reset undoes.
+DEMO_BIO = "Signed in to the shared demo account. Try editing this bio."
+
 DEMO_GUILD_NAME = "Rain Demo Server"
 DEMO_GUILD_DESCRIPTION = "A tour of guild text and voice channels."
 
@@ -32,6 +37,10 @@ class DemoUser:
     username: str
     # Whether this account is friends with `demo` and has a DM with them
     friend: bool = True
+    # Canonical, so the profile card has something in it on a demo visit. A
+    # card that shows a username and a join date does not demonstrate that
+    # there is a profile card at all.
+    bio: str | None = None
 
     @property
     def email(self) -> str:
@@ -75,11 +84,24 @@ class DemoDefinition:
 
 DEMO = DemoDefinition(
     companions=[
-        DemoUser("demo_ada"),
-        DemoUser("demo_grace"),
-        DemoUser("demo_linus"),
+        DemoUser(
+            "demo_ada",
+            bio="Wrote the welcome messages. Ask me about the event pipeline.",
+        ),
+        DemoUser(
+            "demo_grace",
+            bio="Usually in a voice channel. Testing things in two tabs at once.",
+        ),
+        DemoUser(
+            "demo_linus",
+            bio="Here to break it before someone else does.",
+        ),
     ],
-    pending_requester=DemoUser("demo_kai", friend=False),
+    pending_requester=DemoUser(
+        "demo_kai",
+        friend=False,
+        bio="New here. Sent a friend request and waiting.",
+    ),
     channels=[
         DemoChannel("welcome", ChannelType.GUILD_TEXT, "Start here"),
         DemoChannel("general", ChannelType.GUILD_TEXT, "Anything goes"),

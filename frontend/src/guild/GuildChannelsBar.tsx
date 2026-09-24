@@ -46,6 +46,10 @@ function ChannelLink({
 function VoiceRoster({ channelId }: { channelId: string }) {
   const participants = useVoiceStore((state) => state.rosters[channelId]);
   const users = useUserStore((state) => state.users);
+  // Only ever populated for the channel we are connected to: LiveKit reports
+  // audio levels for the room we are in and no other, so a channel you have
+  // not joined lists its people without saying which of them is talking.
+  const speaking = useVoiceStore((state) => state.speaking);
 
   if (!participants?.length) return null;
 
@@ -58,6 +62,7 @@ function VoiceRoster({ channelId }: { channelId: string }) {
             seed={userId}
             size="xs"
             online
+            speaking={speaking[userId] ?? false}
           />
           <span className="truncate text-xs text-ink-400">
             {users[userId]?.username ?? "…"}
@@ -124,7 +129,9 @@ export default function GuildChannelsBar() {
   }, [rosters, fetchUsers]);
 
   return (
-    <SidePanel label="Channels" tourId="guild-channels">
+    // With no channel picked, the channel list is the whole point of the page,
+    // so on a phone it is the page rather than a drawer behind an empty state.
+    <SidePanel label="Channels" tourId="guild-channels" inline={!channelId}>
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-white/[0.06] px-4">
         <Avatar name={guild?.name} seed={guild?.id ?? ""} size="sm" />
         <h2 className="truncate text-[15px] font-semibold text-white">

@@ -69,6 +69,30 @@
     @apply bg-clip-text text-transparent;
   }
 
+  /* Range slider, used by the voice volume controls.
+
+     `appearance: none` is what lets the track be styled, and it also removes
+     the thumb entirely in WebKit and Firefox unless each is given one back —
+     a slider with no handle looks like a progress bar and cannot be found by
+     the mouse, which is why both vendor selectors are here rather than one. */
+  .slider {
+    @apply h-1.5 w-full cursor-pointer rounded-full bg-white/10;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    @apply h-3.5 w-3.5 rounded-full bg-rain-400 transition-transform;
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.6);
+  }
+  .slider::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+  }
+  .slider::-moz-range-thumb {
+    @apply h-3.5 w-3.5 rounded-full border-0 bg-rain-400;
+    box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.6);
+  }
+
   /* Gradient hairline border without a wrapper element. */
   .gradient-border {
     position: relative;

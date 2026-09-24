@@ -37,6 +37,27 @@ class SettingsFactory(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
 
+    # Sessions (Phase 15). The access token was 300 minutes because it was the
+    # whole session: there was nothing to renew it with, so its lifetime and
+    # the user's patience were the same number. With rotation behind it, its
+    # lifetime is only the window in which a stolen access token still works —
+    # it is a bearer token in a cookie JavaScript can read, because the
+    # websocket needs it in a query string, and it cannot be revoked. An hour
+    # is short enough to matter and long enough that a client whose refresh
+    # briefly fails is not thrown out over it.
+    ACCESS_TOKEN_MINUTES: int = 60
+    # How long a sign-in lasts in total. A rotated token inherits the expiry of
+    # the one it replaces rather than extending it, so this is an absolute cap
+    # on the session and not an idle timeout: 30 days after signing in, you
+    # sign in again. Make it sliding by giving the successor a fresh expiry in
+    # `AuthService.rotate_session`, and know that you are choosing a session
+    # that never ends on its own.
+    REFRESH_TOKEN_DAYS: int = 30
+    # A token presented within this many seconds of being rotated away is
+    # treated as a duplicate request rather than as theft. Two tabs waking up
+    # together is the ordinary cause; see the reasoning in `rotate_session`.
+    REFRESH_REUSE_GRACE_SECONDS: int = 15
+
     # Realtime publishing. This must equal the gateway's and the lease
     # manager's, or events land on shards nobody leases and are discarded in
     # silence. `NUM_STREAMS` is the deprecated spelling, still accepted so an

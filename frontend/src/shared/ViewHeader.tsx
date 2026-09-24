@@ -4,7 +4,8 @@ import { useUiStore } from "./uiStore";
 
 /**
  * Header strip for a main view. Owns the only control that opens the side
- * panel on small screens, so no view has to think about the drawer.
+ * panel on small screens, so no view has to think about the drawer. The control
+ * only renders when a `SidePanel` is mounted, which it reports to `uiStore`.
  */
 export default function ViewHeader({
   icon,
@@ -18,16 +19,19 @@ export default function ViewHeader({
   actions?: React.ReactNode;
 }) {
   const setPanelOpen = useUiStore((state) => state.setPanelOpen);
+  const hasPanel = useUiStore((state) => state.hasPanel);
 
   return (
     <header className="flex h-14 shrink-0 items-center gap-3 border-b border-white/[0.06] bg-ink-900/40 px-3 backdrop-blur sm:px-5">
-      <button
-        onClick={() => setPanelOpen(true)}
-        aria-label="Open menu"
-        className="-ml-1 rounded-lg p-2 text-ink-300 transition-colors hover:bg-white/5 hover:text-white lg:hidden"
-      >
-        <FiMenu size={18} />
-      </button>
+      {hasPanel && (
+        <button
+          onClick={() => setPanelOpen(true)}
+          aria-label="Open menu"
+          className="-ml-1 rounded-lg p-2 text-ink-300 transition-colors hover:bg-white/5 hover:text-white lg:hidden"
+        >
+          <FiMenu size={18} />
+        </button>
+      )}
 
       {icon && <span className="shrink-0 text-ink-400">{icon}</span>}
 

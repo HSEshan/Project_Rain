@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext";
 import { Button } from "../shared/Button";
 import { Input } from "../shared/Input";
 import { loginErrorText } from "../shared/errors";
+import { consumeSessionExpired } from "../shared/session";
 import { postLogin } from "./apiClient";
 
 export default function LoginForm() {
@@ -18,6 +19,9 @@ export default function LoginForm() {
   const passwordRef = useRef<HTMLInputElement>(null);
   const [searchParams] = useSearchParams();
   const [error, setError] = useState("");
+  // Read once on mount, and cleared as it is read: refreshing the login page
+  // should not keep announcing a session that ended some time ago.
+  const [expired] = useState(consumeSessionExpired);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,6 +55,14 @@ export default function LoginForm() {
       {searchParams.get("signup") && (
         <p className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3.5 py-2.5 text-sm text-emerald-300">
           Account created. Sign in to continue.
+        </p>
+      )}
+
+      {/* Set by SessionWatch. Without it, being bounced to this screen mid-use
+          looks like the app forgot who you were for no reason. */}
+      {expired && (
+        <p className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3.5 py-2.5 text-sm text-amber-300">
+          Your session expired. Sign in again to pick up where you left off.
         </p>
       )}
 

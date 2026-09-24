@@ -23,18 +23,28 @@ import GuildInviteInboxModal from "./guild/GuildInviteInboxModal";
 import TourOverlay from "./tour/TourOverlay";
 import GroupDMCreateModal from "./messages/GroupDMCreateModal";
 import ProfileCard from "./profile/ProfileCard";
+import SessionWatch from "./auth/SessionWatch";
+import CallDock from "./voice/CallDock";
 
 function MainLayout() {
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-ink-950 text-ink-100">
       <AppInitializer />
       <WebSocketProvider>
+        {/* Inside the provider because it disconnects the socket, and inside
+            the router because it navigates. */}
+        <SessionWatch />
         <Sidebar />
 
         {/* The rail is a fixed bottom bar below `lg`, so it is out of flow and
             the content needs its own room at the bottom. */}
-        <div className="flex min-w-0 flex-1 pb-16 lg:pb-0">
-          <Outlet />
+        <div className="flex min-w-0 flex-1 flex-col pb-16 lg:pb-0">
+          <div className="flex min-h-0 min-w-0 flex-1">
+            <Outlet />
+          </div>
+          {/* Under every route, so a call can be muted or ended from anywhere,
+              not only from the page that started it. */}
+          <CallDock />
         </div>
 
         {/* Single mount point: every modal is driven by store state, so any
@@ -82,7 +92,8 @@ export default function App() {
                 <Route
                   index
                   element={
-                    <div className="flex min-w-0 flex-1 flex-col">
+                    // Below lg the channel list fills the screen instead.
+                    <div className="hidden min-w-0 flex-1 flex-col lg:flex">
                       <EmptyState
                         title="No channel selected"
                         hint="Pick a channel on the left to start talking."

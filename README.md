@@ -193,6 +193,46 @@ VPS with nothing installed.
 wins, so an env file written before the rename keeps running; the alias will be
 dropped in a later release.
 
+### Sessions
+
+Signing in returns two credentials. The **access token** is a JWT in a cookie
+the page can read, because the websocket is opened as `/ws?token=...`; it lasts
+`ACCESS_TOKEN_MINUTES` (60). The **refresh token** is opaque, lives in an
+`httpOnly` cookie scoped to `/api/auth`, and is exchanged at `POST /auth/refresh`
+for a new access token. Each exchange rotates it: the presented token is
+revoked and its successor is issued into the same family, so a token presented
+twice means two parties hold one session and the whole family is revoked.
+
+| Setting | Default | What it means |
+|---------|---------|----------------|
+| `ACCESS_TOKEN_MINUTES` | 60 | How long a copied access token keeps working. It cannot be revoked, so this is the only limit on it |
+| `REFRESH_TOKEN_DAYS` | 30 | How long a sign-in lasts in total. A rotated token inherits its predecessor's expiry, so this is an absolute lifetime, not an idle timeout |
+| `REFRESH_REUSE_GRACE_SECONDS` | 15 | A token replayed this soon after being spent is treated as a duplicate request (two tabs, a retry) rather than as theft |
+
+A third cookie, `rain_session`, is readable and holds nothing but `1`. It tells
+the client that a session exists at all, which it cannot otherwise know because
+the refresh cookie is `httpOnly`; without it every anonymous visit to the
+landing page would send a refresh request and be answered 401.
+
+The refresh cookie is `Secure` in every environment but `development`, which is
+served over plain http. `POST /auth/logout` revokes the family server-side.
+
+## Backups
+
+```bash
+./backup.sh          # nightly via cron on the VPS; --dev for the dev stack
+./restore.sh <dump>  # stops the writers, restores, restarts, prints the counts
+```
+
+`backup.sh` dumps Postgres, gzips it, refuses to keep a dump that is not valid
+gzip or contains no tables, and prunes to the newest 30. `restore.sh` asks you
+to type the database name rather than `y`. Both are documented in `DEPLOY.md`
+R10a, including the cron line and the `OFFSITE_CMD` hook for copying a dump off
+the box, which is the part a same-machine backup does not cover.
+
+Run the restore against the dev stack before you need it in anger. A backup
+nobody has restored is a hope.
+
 ## Deployment
 
 `docker-compose-prod.yml` builds the images on the target host and runs Caddy as

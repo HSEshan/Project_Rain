@@ -10,17 +10,68 @@ import { postSignup } from "./apiClient";
 type Fields = { username: string; email: string; password: string };
 
 /**
- * Client-side rules mirror the backend `UserCreate` model. They exist to give
- * instant feedback, not to enforce anything — the server still validates.
+ * The backend's `UserCreate` rules, restated.
+ *
+ * They exist for instant feedback and enforce nothing — the server validates
+ * again and is the only thing that decides. What matters is that they do not
+ * *disagree*: this used to check length alone, so a username with a space or a
+ * password with no digit passed here and failed there, and the person was
+ * corrected twice, differently, for one mistake. The wording below is the
+ * wording the server would have used.
+ *
+ * If a rule changes in `rest_api/src/auth/schemas.py`, change it here too.
  */
+const USERNAME_MIN_LENGTH = 3;
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_MAX_LENGTH = 20;
+
+function passwordProblem(password: string): string | undefined {
+  const clauses: string[] = [];
+  if (
+    password.length < PASSWORD_MIN_LENGTH ||
+    password.length > PASSWORD_MAX_LENGTH
+  ) {
+    clauses.push(
+      `be between ${PASSWORD_MIN_LENGTH} and ${PASSWORD_MAX_LENGTH} characters`
+    );
+  }
+
+  const missing = [
+    !/[A-Z]/.test(password) && "an uppercase letter",
+    !/[a-z]/.test(password) && "a lowercase letter",
+    !/[0-9]/.test(password) && "a number",
+    !/[!@#$%^&*()_+\-=[\]{}|;:,.<>?/]/.test(password) && "a special character",
+  ].filter((item): item is string => !!item);
+
+  // Everything at once, like the server: revealing one rule per attempt turns
+  // choosing a password into a guessing game.
+  if (missing.length > 0) {
+    const last = missing.pop() as string;
+    clauses.push(
+      "contain " + (missing.length ? `${missing.join(", ")} and ${last}` : last)
+    );
+  }
+  if (clauses.length === 0) return undefined;
+  return `Password must ${clauses.join(", and ")}.`;
+}
+
 function validate(values: Fields): Partial<Fields> {
   const errors: Partial<Fields> = {};
-  if (values.username.trim().length < 3)
-    errors.username = "At least 3 characters.";
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email))
+
+  if (values.username.length < USERNAME_MIN_LENGTH) {
+    errors.username = `Username must be at least ${USERNAME_MIN_LENGTH} characters.`;
+  } else if (!/^[a-zA-Z0-9_]+$/.test(values.username)) {
+    errors.username =
+      "Username can only contain letters, numbers and underscores.";
+  }
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(values.email)) {
     errors.email = "Enter a valid email address.";
-  if (values.password.length < 8)
-    errors.password = "At least 8 characters.";
+  }
+
+  const password = passwordProblem(values.password);
+  if (password) errors.password = password;
+
   return errors;
 }
 

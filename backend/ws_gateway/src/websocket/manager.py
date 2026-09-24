@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 import structlog
@@ -20,9 +21,22 @@ class WebsocketManager:
 
     def __init__(self):
         self.clients: dict[str, set[WebSocket]] = {}
+        # One lock per user, held across every routing change for that user.
+        # Connect, disconnect and refresh each walk the user's channels with an
+        # await per Redis call, and a reload is exactly a disconnect and a
+        # connect at the same moment: interleaved, the teardown removed routes
+        # the new socket had just added and then deleted its user endpoint,
+        # leaving a connected client that silently received nothing. Never
+        # evicted: an entry is one small object per user who ever connected,
+        # and evicting one while a coroutine waits on it would hand the next
+        # caller a second, unrelated lock.
+        self._locks: dict[str, asyncio.Lock] = {}
         self.grpc_endpoint: str | None = None
         self.redis_manager: RedisManager | None = None
         self.user_mapping: UserMapping = UserMapping()
+
+    def _lock(self, user_id: str) -> asyncio.Lock:
+        return self._locks.setdefault(user_id, asyncio.Lock())
 
     def set_grpc_endpoint(self, grpc_endpoint: str):
         """
@@ -44,6 +58,10 @@ class WebsocketManager:
         """
         await websocket.accept()
 
+        async with self._lock(current_user.id):
+            await self._register(current_user, websocket)
+
+    async def _register(self, current_user: CurrentUser, websocket: WebSocket):
         sockets = self.clients.setdefault(current_user.id, set())
         sockets.add(websocket)
 
@@ -76,6 +94,10 @@ class WebsocketManager:
         instance's gRPC endpoint — otherwise the user would receive nothing from
         that channel until they reconnect.
         """
+        async with self._lock(user_id):
+            await self._refresh(user_id)
+
+    async def _refresh(self, user_id: str):
         if user_id not in self.clients:
             return
 
@@ -108,6 +130,10 @@ class WebsocketManager:
         tears down the user's routing — otherwise closing one tab would unroute
         the tab that is still open.
         """
+        async with self._lock(client_id):
+            await self._unregister(client_id, websocket)
+
+    async def _unregister(self, client_id: str, websocket: WebSocket | None):
         sockets = self.clients.get(client_id)
         if not sockets:
             return

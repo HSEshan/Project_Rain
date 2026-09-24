@@ -12,7 +12,7 @@ route is the only way into them.
 import structlog
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from src.auth.utils import create_access_token
+from src.auth.service import AuthService, IssuedSession
 from src.core.config import settings
 from src.database.core import get_db
 from src.database.service import BaseService
@@ -43,7 +43,15 @@ class DemoService(BaseService):
             return DemoStatus(enabled=False)
         return DemoStatus(enabled=True, username=DEMO_USERNAME, notice=NOTICE)
 
-    async def login(self) -> DemoSession:
+    async def login(self) -> tuple[DemoSession, IssuedSession]:
+        """Returns the body and the session, because the route sets a cookie.
+
+        A demo visitor gets the same refresh rotation as anyone else. Minting a
+        bare access token here would have been one line shorter and would mean
+        the demo quietly ends after an hour with no way to renew it — the tour
+        is the first thing a prospective employer clicks, and it would be the
+        one session in the app that expires mid-use.
+        """
         if not settings.DEMO_ENABLED:
             raise ServiceUnavailableException(
                 "The demo account is not enabled on this server"
@@ -63,15 +71,16 @@ class DemoService(BaseService):
         # realtime call: a missing Redis must not fail the login.
         await realtime_publisher.invalidate_user_channels(str(demo_user.id))
 
-        token = await create_access_token(
-            str(demo_user.id), demo_user.email, demo_user.username
-        )
+        session = await AuthService(self.db).issue_session(demo_user)
         logger.info("Demo session issued", user_id=str(demo_user.id))
-        return DemoSession(
-            access_token=token.access_token,
-            token_type=token.token_type,
-            username=demo_user.username,
-            notice=NOTICE,
+        return (
+            DemoSession(
+                access_token=session.access_token.access_token,
+                token_type=session.access_token.token_type,
+                username=demo_user.username,
+                notice=NOTICE,
+            ),
+            session,
         )
 
     @staticmethod

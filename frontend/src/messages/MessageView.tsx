@@ -35,6 +35,19 @@ const timeLabel = (iso: string) =>
     minute: "2-digit",
   });
 
+/**
+ * The time without its AM/PM, for the gutter beside a grouped message. The
+ * gutter is only as wide as an avatar, and "10:42 AM" is not; the full time is
+ * one line up in the group's header and in the title.
+ */
+const shortTimeLabel = (iso: string) =>
+  new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" })
+    .formatToParts(new Date(iso))
+    .filter((part) => part.type !== "dayPeriod")
+    .map((part) => part.value)
+    .join("")
+    .trim();
+
 type Row =
   | { kind: "day"; key: string; label: string }
   | { kind: "message"; key: string; message: Message; grouped: boolean };
@@ -99,8 +112,11 @@ function MessageRow({
       {grouped ? (
         // Keeps the text aligned and shows the timestamp only on hover, which
         // is what stops a long run of messages becoming a wall of metadata.
-        <span className="w-8 shrink-0 pt-0.5 text-right font-mono text-[10px] leading-6 text-ink-500 opacity-0 transition-opacity group-hover:opacity-100">
-          {timeLabel(message.created_at)}
+        <span
+          title={timeLabel(message.created_at)}
+          className="w-8 shrink-0 whitespace-nowrap pt-0.5 text-right font-mono text-[10px] leading-6 text-ink-500 opacity-0 transition-opacity group-hover:opacity-100"
+        >
+          {shortTimeLabel(message.created_at)}
         </span>
       ) : (
         <ProfileTrigger
@@ -114,11 +130,15 @@ function MessageRow({
 
       <div className="min-w-0 flex-1">
         {!grouped && (
-          <p className="mb-0.5 flex items-baseline gap-2">
-            <ProfileTrigger userId={message.sender_id}>
-              <span className="text-sm font-semibold text-white">{label}</span>
+          <p className="mb-0.5 flex min-w-0 items-baseline gap-2">
+            {/* The name gives way to the time, never the other way round: a
+                shrinking time breaks at its space and drops "AM" a line. */}
+            <ProfileTrigger userId={message.sender_id} className="min-w-0">
+              <span className="block truncate text-sm font-semibold text-white">
+                {label}
+              </span>
             </ProfileTrigger>
-            <span className="font-mono text-[10px] text-ink-500">
+            <span className="shrink-0 whitespace-nowrap font-mono text-[10px] text-ink-500">
               {timeLabel(message.created_at)}
             </span>
           </p>

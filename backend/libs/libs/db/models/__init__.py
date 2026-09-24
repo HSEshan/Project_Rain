@@ -21,9 +21,11 @@ from libs.db.models.guild import (
     GuildMemberStatus,
 )
 from libs.db.models.message import Message
-from libs.db.models.user import User
+from libs.db.models.session import RefreshToken
+from libs.db.models.user import BIO_MAX_LENGTH, User
 
 __all__ = [
+    "BIO_MAX_LENGTH",
     "CALLABLE_CHANNEL_TYPES",
     "DIRECT_CHANNEL_TYPES",
     "MAX_GROUP_DM_MEMBERS",
@@ -38,5 +40,6 @@ __all__ = [
     "GuildMemberRole",
     "GuildMemberStatus",
     "Message",
+    "RefreshToken",
     "User",
 ]

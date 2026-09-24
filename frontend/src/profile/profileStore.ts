@@ -22,6 +22,15 @@ interface ProfileStore {
 
   openProfile: (userId: string) => Promise<void>;
   refresh: () => Promise<void>;
+  /**
+   * Replace the open card's contents with a profile the caller already has.
+   *
+   * Saving an edit returns the new profile, and rest_api deliberately does not
+   * send the actor their own event, so this response is the only news of the
+   * change that will ever arrive. Refetching instead would work and would be a
+   * second round trip for an answer already in hand.
+   */
+  applyProfile: (profile: UserProfile) => void;
   close: () => void;
 }
 
@@ -49,6 +58,13 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
   refresh: async () => {
     const userId = get().userId;
     if (userId) await get().openProfile(userId);
+  },
+
+  applyProfile: (profile) => {
+    // Ignore a result for a card that is no longer the open one: a save can
+    // land after the user has clicked through to somebody else.
+    if (get().userId !== profile.id) return;
+    set({ profile });
   },
 
   close: () => set({ userId: null, profile: null, loading: false, error: "" }),

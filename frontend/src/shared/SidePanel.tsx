@@ -14,14 +14,27 @@ export default function SidePanel({
   children,
   label,
   tourId,
+  inline = false,
 }: {
   children: React.ReactNode;
   label: string;
   /** Anchors a tour step to the panel. See src/tour/steps.ts. */
   tourId?: string;
+  /**
+   * Below `lg`, render as the page itself instead of a drawer. For a route
+   * where the panel *is* the content, like a guild with no channel picked:
+   * as a closed drawer beside an empty state, the only way in is hidden.
+   */
+  inline?: boolean;
 }) {
-  const { panelOpen, setPanelOpen } = useUiStore();
+  const { panelOpen, setPanelOpen, setHasPanel } = useUiStore();
   const { pathname } = useLocation();
+
+  // Inline, the panel is already on screen, so there is nothing to open.
+  useEffect(() => {
+    setHasPanel(!inline);
+    return () => setHasPanel(false);
+  }, [inline, setHasPanel]);
 
   useEffect(() => {
     setPanelOpen(false);
@@ -33,6 +46,18 @@ export default function SidePanel({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [panelOpen, setPanelOpen]);
+
+  if (inline) {
+    return (
+      <aside
+        aria-label={label}
+        data-tour={tourId}
+        className="flex w-full shrink-0 flex-col bg-ink-900/60 lg:w-64 lg:border-r lg:border-white/[0.06]"
+      >
+        {children}
+      </aside>
+    );
+  }
 
   return (
     <>

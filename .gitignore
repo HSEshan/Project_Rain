@@ -88,3 +88,12 @@ timeline.md
 deploy.md
 /.claude
 devnotes.md
+
+# ---- Database dumps ----
+# A dump holds every account, every email, every password hash and every
+# message. Committing one would be a worse leak than the API bug that started
+# this. `backup.sh` writes here by default.
+backups-dev/
+backups/
+*.sql.gz
+*.sql.gz.partial

@@ -32,3 +32,20 @@ export const postSignup = async (
   password: string
 ): Promise<AxiosResponse> =>
   apiClient.post("/auth/register", { username, email, password });
+
+/**
+ * End the session on the server as well as in this browser.
+ *
+ * Swallows everything. Sign-out is the one action a user must never be told
+ * failed: the local half has already happened by the time this settles, the
+ * server half is a revocation they cannot retry, and an error toast on the way
+ * to the login screen would be pure noise. The refresh cookie is httpOnly, so
+ * this request is the only way to reach it.
+ */
+export const postLogout = async (): Promise<void> => {
+  try {
+    await apiClient.post("/auth/logout");
+  } catch {
+    // Offline, or a session that was already over. Nothing to do either way.
+  }
+};

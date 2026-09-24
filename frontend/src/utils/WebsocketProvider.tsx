@@ -8,8 +8,10 @@ import React, {
   useCallback,
 } from "react";
 import { useAuth } from "../auth/AuthContext";
+import { refreshSession } from "../auth/refresh";
 import { eventBus } from "./EventBus";
 import { emitResync } from "../shared/resync";
+import { emitSessionExpired } from "../shared/session";
 import type { EventPayload } from "./eventType";
 
 interface WebSocketContextType {
@@ -33,6 +35,21 @@ const MAX_RETRY_DELAY = 30000; // 30 seconds
  */
 const MAX_BACKOFF_EXPONENT = 5;
 
+/**
+ * The gateway's answer to a token it will not accept
+ * (`WS_1008_POLICY_VIOLATION`, `ws_gateway/src/auth/service.py`).
+ *
+ * Retrying it *unchanged* is pointless: the token that was refused is the only
+ * token this tab has, so every attempt gets the same answer, and the socket
+ * used to settle into a 30 second poll against a server that would reject it
+ * forever. Since Phase 15 there is a third possibility between "outage" and
+ * "signed out" — the access token simply reached the end of its hour while the
+ * socket was open, which the gateway only notices on the next connect. So a
+ * 1008 is answered by renewing once and reconnecting with the new token, and
+ * only a renewal that is itself refused ends the session.
+ */
+const WS_POLICY_VIOLATION = 1008;
+
 export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -45,12 +62,19 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
   // Distinguishes a reconnect from the first connect: AppInitializer has
   // already fetched everything for the latter, so resyncing then is wasted work
   const hasConnectedRef = useRef(false);
+  // Whether this run of disconnections has already spent a forced renewal. A
+  // gateway that refuses a freshly minted token is not refusing it for being
+  // stale, so trying again would burn a refresh token per reconnect.
+  const renewedForOutageRef = useRef(false);
   const { getToken } = useAuth();
 
-  const connect = useCallback(() => {
+  const connect = useCallback((tokenOverride?: string) => {
     if (isConnecting || wsRef.current) return;
 
-    const token = getToken();
+    // The override is the token a renewal just returned. Going through
+    // `getToken` instead would read React state that has not re-rendered yet,
+    // and reconnect with the token the gateway just refused.
+    const token = tokenOverride ?? getToken();
     if (!token) {
       console.error("No token found");
       return;
@@ -68,6 +92,8 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsConnected(true);
       setIsConnecting(false);
       retryCountRef.current = 0; // Reset retry count on successful connection
+      // The outage is over, so the next one may renew again.
+      renewedForOutageRef.current = false;
 
       // Anything published while the socket was down was delivered to nobody
       // and is not retried anywhere, so the client has to assume it is behind.
@@ -98,6 +124,35 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
       setIsConnected(false);
       setIsConnecting(false);
       wsRef.current = null;
+
+      // A refused token is not an outage, and no amount of waiting fixes it —
+      // but a *renewed* token might be accepted.
+      //
+      // `force`, because the gateway has just contradicted the only evidence
+      // the client had. `tokenNeedsRefresh` reads the token's own `exp`, and a
+      // token can be refused while that still looks fine — clock skew between
+      // the two services, a rotated `SECRET_KEY`, or env files that drifted
+      // apart. Without forcing, the renewal returned the same refused token
+      // and the socket reconnected with it forever.
+      //
+      // Once per outage, because forcing is a real rotation. If the *renewed*
+      // token is refused too, renewing is not the answer and this is an outage
+      // like any other: fall through to backoff rather than spending a refresh
+      // token per attempt.
+      if (event.code === WS_POLICY_VIOLATION && !renewedForOutageRef.current) {
+        renewedForOutageRef.current = true;
+        shouldReconnectRef.current = false;
+        void refreshSession({ force: true }).then((renewed) => {
+          if (!renewed) {
+            emitSessionExpired();
+            return;
+          }
+          shouldReconnectRef.current = true;
+          retryCountRef.current = 0;
+          connect(renewed);
+        });
+        return;
+      }
 
       // Keep trying for as long as the tab is open. The delay is capped, so
       // this settles into a poll rather than growing without bound.

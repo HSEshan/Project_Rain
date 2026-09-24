@@ -12,6 +12,7 @@ import type { Channel } from "../shared/types";
 import Avatar from "../shared/Avatar";
 import { Button } from "../shared/Button";
 import ViewHeader from "../shared/ViewHeader";
+import VolumeControl from "./VolumeControl";
 import { useVoiceStore } from "./voiceStore";
 
 function ParticipantTile({
@@ -24,11 +25,15 @@ function ParticipantTile({
   muted: boolean;
 }) {
   const user = useUserStore((state) => state.users[userId]);
+  // One boolean, not the whole map: this re-renders when *this* person starts
+  // or stops talking and not when anyone else does, which is what keeps a
+  // roster of ten people from re-rendering ten times a second.
+  const speaking = useVoiceStore((state) => state.speaking[userId] ?? false);
   const name = user?.username ?? "…";
 
   return (
     <div className="flex w-32 flex-col items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-3 py-5 transition-colors hover:border-white/[0.12] sm:w-36">
-      <Avatar name={name} seed={userId} size="xl" />
+      <Avatar name={name} seed={userId} size="xl" speaking={speaking} />
       <div className="flex w-full items-center justify-center gap-1.5">
         <span className="truncate text-sm text-ink-200">{name}</span>
         {isSelf && muted && (
@@ -90,6 +95,7 @@ function ControlBar({
       >
         {deafened ? <FiVolumeX size={17} /> : <FiVolume2 size={17} />}
       </button>
+      <VolumeControl />
       <button
         onClick={onLeave}
         title="Disconnect"

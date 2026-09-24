@@ -21,6 +21,7 @@ from src.user.schemas import (
     MutualGuild,
     UserProfile,
     UserResponse,
+    UserUpdate,
 )
 
 
@@ -54,11 +55,37 @@ class UserService(BaseService):
         return UserProfile(
             id=user_id,
             username=user.username,
+            bio=user.bio,
             created_at=user.created_at,
             friend_state=await self._friend_state(viewer_id, user_id),
             dm_channel_id=await self._shared_dm_channel_id(viewer_id, user_id),
             mutual_guilds=await self._mutual_guilds(viewer_id, user_id),
         )
+
+    async def update_me(self, user_id: str, update: UserUpdate) -> UserProfile:
+        """Edit your own profile. There is no route that edits anyone else's.
+
+        The authorisation is the absence of a parameter: the id comes from the
+        token and the path is `/users/me`, so there is no user id to get wrong
+        and no ownership check to forget. A route shaped `PATCH /users/{id}`
+        would need one, and would be one missing `if` away from letting anyone
+        rewrite anyone.
+
+        Only fields the caller actually named are touched. `model_fields_set`
+        is the difference between "clear my bio" and "I sent you an avatar and
+        said nothing about my bio", which are the same JSON once pydantic has
+        filled the default in.
+        """
+        async with self.db.begin():
+            user = await UserRepository.get_user_by_id(self.db, user_id)
+            if "bio" in update.model_fields_set:
+                user.bio = update.bio
+
+        # Returned as a full profile so the client can drop it straight into the
+        # store it already renders from. rest_api excludes the actor from the
+        # events it publishes, so this response *is* how the person who made the
+        # change finds out it worked — there is no event coming.
+        return await self.get_profile(user_id, user_id)
 
     async def _friend_state(self, viewer_id: str, user_id: str) -> FriendState:
         if viewer_id == user_id:

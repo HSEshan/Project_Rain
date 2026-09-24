@@ -100,6 +100,15 @@ export function Sidebar() {
         </SideBarButton>
       </div>
 
+      {/* The bar is the only chrome a phone has, so your own profile needs a
+          slot here too, or your bio can only be edited from a desktop. */}
+      <ProfileTrigger
+        userId={user?.id}
+        label="Your profile"
+        className="flex h-11 w-11 items-center justify-center rounded-full lg:hidden"
+      >
+        <Avatar name={user?.username} seed={user?.id} size="sm" />
+      </ProfileTrigger>
       <span className="lg:hidden">
         <SideBarButton label="Log out" onClick={handleLogout} destructive>
           <FiLogOut size={19} />
