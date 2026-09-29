@@ -14,7 +14,7 @@ const CHANNELS = [
 
 const MESSAGES = [
   {
-    author: "priya",
+    author: "miley",
     color: "from-emerald-400 to-teal-500",
     time: "20:14",
     lines: ["voice is up on the new box"],
@@ -26,7 +26,7 @@ const MESSAGES = [
     lines: ["ICE picked udp in 39ms", "held for two hours, no drops"],
   },
   {
-    author: "priya",
+    author: "miley",
     color: "from-emerald-400 to-teal-500",
     time: "20:16",
     lines: ["nice. jumping in now"],
@@ -35,7 +35,7 @@ const MESSAGES = [
 
 const IN_VOICE = [
   { name: "eshan", color: "from-rain-400 to-iris-400", speaking: true },
-  { name: "priya", color: "from-emerald-400 to-teal-500", speaking: false },
+  { name: "miley", color: "from-emerald-400 to-teal-500", speaking: false },
 ];
 
 function Bars() {

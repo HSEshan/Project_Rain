@@ -10,7 +10,7 @@ const POINTS = [
 
 const TILES = [
   { name: "eshan", color: "from-rain-400 to-iris-400", speaking: true },
-  { name: "priya", color: "from-emerald-400 to-teal-500", speaking: false },
+  { name: "miley", color: "from-emerald-400 to-teal-500", speaking: false },
   { name: "sam", color: "from-amber-400 to-orange-500", speaking: true },
   { name: "júlia", color: "from-fuchsia-400 to-purple-500", speaking: false },
 ];
