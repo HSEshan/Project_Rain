@@ -1,0 +1,82 @@
+#!/bin/bash
+# First-boot setup for the Project Rain instance. Rendered by Terraform
+# (templatefile), so every shell variable is written $${like_this}; a bare
+# dollar-brace is Terraform's.
+#
+# This prepares the host only: Docker, the compose and buildx plugins, Python
+# for the repo's config scripts, and a swap file. It deploys nothing. The
+# first `scripts/deploy-backend.sh` does that, through SSM Run Command, the
+# same way every later deploy does. Re-running it is safe.
+#
+# Log: /var/log/project-rain-bootstrap.log (also in the EC2 console's system log)
+
+set -euxo pipefail
+exec > >(tee -a /var/log/project-rain-bootstrap.log) 2>&1
+
+# --- swap ---------------------------------------------------------------------
+# 2 GB of RAM builds the Python images, but only just; a pip install that
+# spikes past it gets the build OOM-killed with an unhelpful error. Swap turns
+# that into slowness instead.
+if [ ! -f /swapfile ]; then
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+fi
+
+# --- packages -----------------------------------------------------------------
+# python3.11 because the repo's config scripts (generate_env_files.py,
+# check_config.py) are written against a modern Python and the system python3
+# on AL2023 is 3.9. The AWS CLI and the SSM agent ship with the AMI.
+dnf install -y docker python3.11 tar gzip
+systemctl enable --now docker
+usermod -aG docker ssm-user 2>/dev/null || true
+usermod -aG docker ec2-user
+
+# --- compose and buildx plugins -------------------------------------------------
+# Not packaged for AL2023, so fetched from the official GitHub releases and
+# checked against the checksums published beside them.
+case "$(uname -m)" in
+  aarch64) compose_arch=aarch64; buildx_arch=arm64 ;;
+  x86_64)  compose_arch=x86_64;  buildx_arch=amd64 ;;
+  *) echo "unsupported architecture $(uname -m)"; exit 1 ;;
+esac
+
+plugins=/usr/local/lib/docker/cli-plugins
+mkdir -p "$plugins"
+cd /tmp
+
+compose_asset="docker-compose-linux-$${compose_arch}"
+curl -fsSLO "https://github.com/docker/compose/releases/download/v${compose_version}/$${compose_asset}"
+curl -fsSLO "https://github.com/docker/compose/releases/download/v${compose_version}/$${compose_asset}.sha256"
+sha256sum -c "$${compose_asset}.sha256"
+install -m 0755 "$${compose_asset}" "$plugins/docker-compose"
+
+buildx_asset="buildx-v${buildx_version}.linux-$${buildx_arch}"
+curl -fsSLO "https://github.com/docker/buildx/releases/download/v${buildx_version}/$${buildx_asset}"
+curl -fsSL -o buildx-checksums.txt "https://github.com/docker/buildx/releases/download/v${buildx_version}/checksums.txt"
+grep " \*\?$${buildx_asset}\$" buildx-checksums.txt | sha256sum -c
+install -m 0755 "$${buildx_asset}" "$plugins/docker-buildx"
+
+docker compose version
+docker buildx version
+
+# --- layout ---------------------------------------------------------------------
+#   /opt/rain/releases/<id>   one extracted tarball per deploy
+#   /opt/rain/current         symlink to the release that is running
+#   /opt/rain/shared          env files and livekit.yaml, generated once and
+#                             kept across releases (they hold the secrets)
+mkdir -p /opt/rain/releases /opt/rain/shared /etc/project-rain
+chmod 700 /opt/rain/shared
+
+# The only configuration in user data: where to find the rest. Everything
+# else, secrets included, is read from SSM at deploy time.
+cat > /etc/project-rain/bootstrap.env <<EOF
+AWS_REGION=${region}
+AWS_DEFAULT_REGION=${region}
+RAIN_SSM_PREFIX=${ssm_prefix}
+EOF
+
+touch /etc/project-rain/bootstrap-complete
+echo "bootstrap complete"

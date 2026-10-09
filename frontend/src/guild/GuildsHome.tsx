@@ -68,7 +68,12 @@ export default function GuildsHome() {
                       onClick={() => navigate(`/guild/${guild.id}`)}
                       className="group flex items-center gap-3.5 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 text-left transition-all duration-300 hover:-translate-y-0.5 hover:border-rain-400/30 hover:bg-white/[0.05]"
                     >
-                      <Avatar name={guild.name} seed={guild.id} size="lg" />
+                      <Avatar
+                        name={guild.name}
+                        seed={guild.id}
+                        src={guild.icon_url ?? null}
+                        size="lg"
+                      />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-semibold text-white">
                           {guild.name}

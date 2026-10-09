@@ -1161,6 +1161,128 @@ run_probe(
     "realtime probe",
 )
 
+print("== uploads ==")
+
+
+def tiny_png(width=64, height=48) -> bytes:
+    """A valid PNG from the stdlib alone: the host running this has no Pillow."""
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
+
+    rows = b"".join(b"\x00" + b"\x20\x90\xd0" * width for _ in range(height))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+def upload(method, path, data, token, filename="image.png", ctype="image/png"):
+    """A multipart upload with one `file` field. Returns (status, parsed body)."""
+    boundary = uuid.uuid4().hex
+    body = (
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
+        f"filename=\"{filename}\"\r\nContent-Type: {ctype}\r\n\r\n"
+    ).encode() + data + f"\r\n--{boundary}--\r\n".encode()
+    req = urllib.request.Request(BASE + path, data=body, method=method)
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return resp.status, json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        payload = e.read().decode()
+        return e.code, json.loads(payload) if payload.startswith("{") else payload
+
+
+def fetch_media(url):
+    """GET a /media URL through the edge. Returns (status, content type)."""
+    try:
+        with urllib.request.urlopen(BASE.removesuffix("/api") + url) as resp:
+            return resp.status, resp.headers.get("Content-Type")
+    except urllib.error.HTTPError as e:
+        return e.code, None
+
+
+# Found while adding avatars (2026-09-29): this route returned ORM User rows
+# with no response model, so every friend's email and bcrypt hash went to the
+# client, the same leak `GET /users/` had. This is the check that it stays shut.
+status, friends = call("GET", "/friendship/friends/me", token=alice["token"], expect=200)
+check(
+    "friends list hides emails and password hashes",
+    bool(friends)
+    and all("email" not in f and "password_hash" not in f for f in friends),
+    str(friends)[:200],
+)
+
+status, me = upload("PUT", "/users/me/avatar", tiny_png(), alice["token"])
+avatar_url = (me or {}).get("avatar_url") if isinstance(me, dict) else None
+check("avatar upload", status == 200 and bool(avatar_url), f"{status} {me}")
+check(
+    "avatar is stored as a key and served at /media",
+    bool(avatar_url) and avatar_url.startswith("/media/avatars/") and avatar_url.endswith(".webp"),
+    str(avatar_url),
+)
+check("avatar is served by the edge as webp", fetch_media(avatar_url or "/media/x") == (200, "image/webp"))
+
+status, others_view = call("GET", f"/users/{alice['id']}/profile", token=bob["token"])
+check("other people see the avatar", (others_view or {}).get("avatar_url") == avatar_url)
+
+status, me = upload("PUT", "/users/me/avatar", tiny_png(32, 32), alice["token"])
+check(
+    "replacing an avatar deletes the old object",
+    status == 200 and fetch_media(avatar_url or "/media/x")[0] == 404,
+)
+status, me = call("DELETE", "/users/me/avatar", token=alice["token"], expect=200)
+check("clearing an avatar", (me or {}).get("avatar_url") is None, str(me))
+
+status, refused = upload(
+    "PUT", "/users/me/avatar", b"<html><script>alert(1)</script></html>", alice["token"]
+)
+check("a file that is not an image is refused (415)", status == 415, f"{status} {refused}")
+status, refused = upload(
+    "PUT", "/users/me/avatar", b"\x89PNG" + b"\x00" * (9 * 1024 * 1024), alice["token"]
+)
+check("an upload over 8 MB is refused (413)", status == 413, f"{status}")
+
+status, icon = upload("PUT", f"/guilds/{shared_guild['id']}/icon", tiny_png(), bob["token"])
+check("a non-admin cannot change the guild icon (403)", status == 403, f"{status} {icon}")
+status, icon = upload("PUT", f"/guilds/{shared_guild['id']}/icon", tiny_png(), alice["token"])
+check(
+    "the admin can change the guild icon",
+    status == 200 and str((icon or {}).get("icon_url", "")).startswith("/media/guild-icons/"),
+    f"{status} {icon}",
+)
+check("guild responses never carry the raw key", "icon_key" not in (icon or {}))
+
+status, attachment = upload("POST", "/uploads/attachments", tiny_png(3000, 20), alice["token"])
+check(
+    "attachment upload, scaled to 2048 on the long side",
+    status == 201 and (attachment or {}).get("width") == 2048,
+    f"{status} {attachment}",
+)
+
+if status == 201:
+    run_probe(
+        "attachment_probe.py",
+        {
+            "owner": alice,
+            "other": bob,
+            "channel_id": dm_channel_id,
+            "attachment_id": attachment["id"],
+        },
+        "attachment probe",
+    )
+
 print("== voice (livekit sfu) ==")
 
 

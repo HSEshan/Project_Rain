@@ -19,6 +19,7 @@ from src.database.service import BaseService
 from src.demo.data import DEMO_USERNAME
 from src.demo.schemas import DemoSession, DemoStatus
 from src.demo.seed import ensure_demo_data, reset_demo_state
+from src.media.storage import delete_quietly
 from src.realtime.publisher import realtime_publisher
 from src.utils.exceptions import ServiceUnavailableException
 
@@ -57,14 +58,18 @@ class DemoService(BaseService):
                 "The demo account is not enabled on this server"
             )
 
+        stale_media: list[str] = []
         async with self.db.begin():
             # `reset_demo_state` creates anything missing on its way through,
             # so the cooldown path still lands on a complete account.
             if await self._claim_cooldown():
-                demo_user = await reset_demo_state(self.db)
+                demo_user = await reset_demo_state(self.db, stale_media)
             else:
                 logger.debug("Demo reset skipped, within cooldown")
                 demo_user = await ensure_demo_data(self.db)
+
+        # Images a visitor uploaded, now that nothing points at them
+        await delete_quietly(stale_media)
 
         # The reset can delete channels the account was a member of, so drop
         # the gateway's cached membership. Best effort, like every other

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class GuildCreate(BaseModel):
@@ -53,3 +53,28 @@ class GuildInviteSummary(BaseModel):
 class GuildMemberRemove(BaseModel):
     guild_id: str
     member_id: str
+
+
+class GuildResponse(BaseModel):
+    """A guild as its members see it.
+
+    Added with the icon (Phase 19). These routes used to return the ORM row
+    with no response model, which was harmless only while every column was
+    public; a response model is the allowlist, and the icon added the first
+    column (`icon_key`) that should not leave the server as-is.
+    """
+
+    id: str
+    name: str
+    description: str
+    owner_id: Optional[str] = None
+    icon_url: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+    @field_validator("id", "owner_id", mode="before")
+    @classmethod
+    def _as_str(cls, value):
+        return str(value) if value is not None else None

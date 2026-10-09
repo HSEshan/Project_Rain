@@ -4,6 +4,7 @@ Alembic autogenerate and any `create_all` only see tables that have been
 imported, so nothing here may be dropped even if it looks unused.
 """
 
+from libs.db.models.attachment import MAX_ATTACHMENTS_PER_MESSAGE, Attachment
 from libs.db.models.channel import (
     CALLABLE_CHANNEL_TYPES,
     DIRECT_CHANNEL_TYPES,
@@ -25,6 +26,8 @@ from libs.db.models.session import RefreshToken
 from libs.db.models.user import BIO_MAX_LENGTH, User
 
 __all__ = [
+    "MAX_ATTACHMENTS_PER_MESSAGE",
+    "Attachment",
     "BIO_MAX_LENGTH",
     "CALLABLE_CHANNEL_TYPES",
     "DIRECT_CHANNEL_TYPES",

@@ -34,6 +34,9 @@ services:
       - ./rest_api.dev.env
     volumes:
       - ./backend/rest_api:/app
+      # Uploaded images (STORAGE_BACKEND=local, the default). The edge mounts
+      # the same volume read-only and serves it at /media.
+      - media_data:/data/media
     # python:slim has no curl, so the check is done with the stdlib
     healthcheck:
       test:
@@ -144,9 +147,11 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+      - media_data:/srv/media:ro
 
 volumes:
   postgres_data:
   redis_data:
+  media_data:
   caddy_data:
   caddy_config:

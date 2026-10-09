@@ -41,3 +41,21 @@ class ServiceUnavailableException(HTTPException):
 
     def __init__(self, detail: str = "Service unavailable"):
         super().__init__(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+
+
+class PayloadTooLargeException(HTTPException):
+    """An upload over the size limit. The message names the limit."""
+
+    def __init__(self, detail: str = "That file is too large"):
+        super().__init__(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=detail
+        )
+
+
+class UnsupportedMediaTypeException(HTTPException):
+    """An upload whose bytes are not an image we accept, whatever it claims."""
+
+    def __init__(self, detail: str = "That file type is not supported"):
+        super().__init__(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail=detail
+        )

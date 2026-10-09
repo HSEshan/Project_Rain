@@ -9,7 +9,10 @@ import { errorText } from "../shared/errors";
 import { createFriendRequest } from "../friends/apiClient";
 import { useProfileStore } from "./profileStore";
 import ProfileBio from "./ProfileBio";
-import { FriendState } from "./apiClient";
+import { FriendState, type UserProfile } from "./apiClient";
+import { deleteMyAvatar, putMyAvatar } from "../media/apiClient";
+import ImageEditButton from "../media/ImageEditButton";
+import { useUserStore } from "../shared/userStore";
 
 const JOINED = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, {
@@ -26,7 +29,9 @@ const JOINED = (iso: string) =>
  * you have never met, and offers exactly the action that fits.
  */
 export default function ProfileCard() {
-  const { userId, profile, loading, error, close, refresh } = useProfileStore();
+  const { userId, profile, loading, error, close, refresh, applyProfile } =
+    useProfileStore();
+  const mergeUsers = useUserStore((state) => state.mergeUsers);
   const navigate = useNavigate();
   const [sending, setSending] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -55,6 +60,25 @@ export default function ProfileCard() {
     navigate(`/dm/${profile.dm_channel_id}`);
   };
 
+  // The response is the only news of the change this client will get (no event
+  // goes to the actor), so it lands in both places an avatar is read from: the
+  // open card, and the user store every other circle on screen reads.
+  const applyOwnProfile = (updated: UserProfile) => {
+    applyProfile(updated);
+    mergeUsers([
+      { id: updated.id, username: updated.username, avatar_url: updated.avatar_url },
+    ]);
+  };
+
+  const removeAvatar = async () => {
+    setActionError("");
+    try {
+      applyOwnProfile(await deleteMyAvatar());
+    } catch (removeError) {
+      setActionError(errorText(removeError, "Could not remove your avatar."));
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={close} title="Profile">
       {loading && (
@@ -68,7 +92,27 @@ export default function ProfileCard() {
       {!loading && profile && (
         <div className="space-y-5">
           <div className="flex items-center gap-4">
-            <Avatar name={profile.username} seed={profile.id} size="xl" />
+            {profile.friend_state === FriendState.SELF ? (
+              <ImageEditButton
+                label="Change your avatar"
+                onUpload={async (file) => applyOwnProfile(await putMyAvatar(file))}
+                onError={setActionError}
+              >
+                <Avatar
+                  name={profile.username}
+                  seed={profile.id}
+                  src={profile.avatar_url}
+                  size="xl"
+                />
+              </ImageEditButton>
+            ) : (
+              <Avatar
+                name={profile.username}
+                seed={profile.id}
+                src={profile.avatar_url}
+                size="xl"
+              />
+            )}
             <div className="min-w-0">
               <p className="truncate text-xl font-semibold text-white">
                 {profile.username}
@@ -79,6 +123,14 @@ export default function ProfileCard() {
               <p className="mt-1 text-xs text-ink-300">
                 {RELATIONSHIP[profile.friend_state]}
               </p>
+              {profile.friend_state === FriendState.SELF && profile.avatar_url && (
+                <button
+                  onClick={() => void removeAvatar()}
+                  className="mt-1 text-xs text-ink-400 underline-offset-4 transition-colors hover:text-red-300 hover:underline"
+                >
+                  Remove avatar
+                </button>
+              )}
             </div>
           </div>
 

@@ -22,6 +22,9 @@ class UserResponse(BaseModel):
 
     id: str
     username: str
+    # Null for most people, who have never uploaded one. The client falls back
+    # to the letter avatar, which is the common path rather than the edge case.
+    avatar_url: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -66,6 +69,7 @@ class UserProfile(BaseModel):
 
     id: str
     username: str
+    avatar_url: Optional[str] = None
     # Null means nobody has written one, which the card treats differently from
     # an empty string: one gets a prompt, the other could not exist.
     bio: Optional[str] = None

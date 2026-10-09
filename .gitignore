@@ -15,6 +15,9 @@ ENV/
 env/
 *.env
 *.ini
+# No secrets in it (env.py fills sqlalchemy.url from settings), and the alembic
+# CLI cannot find the migrations without it: CI's `alembic check` needs it.
+!backend/rest_api/alembic.ini
 *.pem
 
 # Alembic

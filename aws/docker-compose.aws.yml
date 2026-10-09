@@ -1,0 +1,77 @@
+# AWS overrides for docker-compose-prod.yml. Applied on the instance by
+# aws/instance/deploy-release.sh:
+#
+#   docker compose -f docker-compose-prod.yml -f aws/docker-compose.aws.yml \
+#     [-f aws/docker-compose.aws-rds.yml] --env-file /opt/rain/shared/compose.env up -d --build
+#
+# Three differences from the VPS, and nothing else:
+#
+# 1. Logs go to CloudWatch (awslogs driver), one stream per container, instead
+#    of json-file on the instance's disk.
+# 2. No frontend container. CloudFront serves the built bundle from S3.
+# 3. Caddy listens on :80 for CloudFront, and refuses any request that does not
+#    carry CloudFront's secret origin header (aws/Caddyfile.aws).
+#
+# `!override` replaces a list or map from the base file instead of merging into
+# it. It needs Compose 2.24.4 or later, which the instance's bootstrap installs.
+#
+# ${AWS_REGION}, ${RAIN_LOG_GROUP} and ${ORIGIN_VERIFY_SECRET} come from the
+# --env-file the deploy script writes. They are interpolated by Compose, not
+# read by the containers.
+
+x-logging: &cloudwatch
+  driver: awslogs
+  options:
+    awslogs-region: ${AWS_REGION:?}
+    awslogs-group: ${RAIN_LOG_GROUP:?}
+    # The group is Terraform's (with retention). Creating it here would make a
+    # typo silently start a second, never-expiring group.
+    awslogs-create-group: "false"
+    # Stream name per container, e.g. "project-rain-rest_api-1"
+    tag: "{{.Name}}"
+    # Buffer and drop rather than block the container if CloudWatch is
+    # unreachable: a logging outage must not become an application outage.
+    mode: non-blocking
+    max-buffer-size: 4m
+
+services:
+  redis:
+    logging: *cloudwatch
+
+  postgres:
+    logging: *cloudwatch
+
+  rest_api:
+    logging: *cloudwatch
+
+  ws_gateway:
+    logging: *cloudwatch
+
+  event_consumer:
+    logging: *cloudwatch
+
+  lease_manager:
+    logging: *cloudwatch
+
+  livekit:
+    logging: *cloudwatch
+
+  # Served from S3 by CloudFront. A profile nobody enables keeps it defined
+  # (the base file references it) but never started.
+  frontend:
+    profiles: ["vps-only"]
+
+  edge:
+    depends_on: !override
+      - rest_api
+      - ws_gateway
+      - livekit
+    ports: !override
+      - "80:80"
+    volumes: !override
+      - ./aws/Caddyfile.aws:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      ORIGIN_VERIFY_SECRET: ${ORIGIN_VERIFY_SECRET:?}
+    logging: *cloudwatch

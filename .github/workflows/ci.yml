@@ -63,7 +63,11 @@ jobs:
           python -m pytest tests -q
 
       - name: event_consumer tests
+        # Same reason as rest_api: src.config reads the env at import time.
         run: |
+          set -a
+          . ./event_consumer.dev.env
+          set +a
           cd backend/event_consumer
           python -m unittest discover -s tests -v
 

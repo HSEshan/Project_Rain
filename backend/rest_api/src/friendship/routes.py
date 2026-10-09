@@ -1,11 +1,19 @@
 from fastapi import APIRouter, Depends, status
 from src.auth.utils import user_dependency
 from src.friendship.service import FriendshipService, get_friendship_service
+from src.user.schemas import UserResponse
 
 router = APIRouter(prefix="/friendship", tags=["friendship"])
 
 
-@router.get("/friends/me", status_code=status.HTTP_200_OK)
+# `response_model` is the allowlist. The service returns ORM `User` rows, and
+# without it this route sent every friend's email and bcrypt hash to the client:
+# the same leak `GET /users/` had, found again 2026-09-29 while adding avatars.
+@router.get(
+    "/friends/me",
+    response_model=list[UserResponse],
+    status_code=status.HTTP_200_OK,
+)
 async def get_user_friends(
     user: user_dependency,
     friendship_service: FriendshipService = Depends(get_friendship_service),

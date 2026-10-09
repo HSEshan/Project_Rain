@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiSend } from "react-icons/fi";
+import { FiImage, FiSend, FiX } from "react-icons/fi";
 import { type Message } from "../shared/types";
 import { useWebSocket } from "../utils/WebsocketProvider";
 import { useMessageStore } from "../shared/messageStore";
@@ -9,6 +9,12 @@ import { useUserStore } from "../shared/userStore";
 import Avatar from "../shared/Avatar";
 import ViewHeader from "../shared/ViewHeader";
 import ProfileTrigger from "../profile/ProfileTrigger";
+import AttachmentGallery from "../media/AttachmentGallery";
+import { useAttachmentDrafts } from "../media/useAttachmentDrafts";
+import {
+  ACCEPTED_IMAGE_TYPES,
+  MAX_ATTACHMENTS_PER_MESSAGE,
+} from "../media/apiClient";
 
 /** Messages from the same person within this window share one header. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -143,9 +149,14 @@ function MessageRow({
             </span>
           </p>
         )}
-        <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-200">
-          {message.content}
-        </p>
+        {/* A message can be images alone, and an empty paragraph would still
+            take a line of height above them. */}
+        {message.content && (
+          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-200">
+            {message.content}
+          </p>
+        )}
+        <AttachmentGallery attachments={message.attachments ?? []} />
       </div>
     </div>
   );
@@ -193,6 +204,8 @@ export function MessageView({
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState("");
+  const attachments = useAttachmentDrafts(channelId);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const rows = useMemo(() => buildRows(messages), [messages]);
 
@@ -238,9 +251,12 @@ export function MessageView({
     node.style.height = Math.min(node.scrollHeight, 160) + "px";
   };
 
+  const canSend =
+    (!!draft.trim() || attachments.readyIds.length > 0) && !attachments.uploading;
+
   const sendMessage = () => {
     const text = draft.trim();
-    if (!text) return;
+    if (!canSend) return;
     if (!ws) {
       setSendError("Not connected. Reconnecting, your message was not sent.");
       return;
@@ -250,11 +266,28 @@ export function MessageView({
         event_type: EventType.MESSAGE,
         receiver_id: channelId,
         text,
+        // Only a request: the gateway links each id that is ours and unsent,
+        // and tells every recipient (us included) what it actually attached.
+        ...(attachments.readyIds.length > 0 && {
+          metadata: { attachment_ids: attachments.readyIds },
+        }),
       })
     );
     setDraft("");
     setSendError("");
+    attachments.clear();
     requestAnimationFrame(resizeInput);
+  };
+
+  // A pasted screenshot is the most common way an image enters a chat, so the
+  // textarea accepts one directly. Text pastes are left to the browser.
+  const handlePaste = (e: React.ClipboardEvent) => {
+    const images = Array.from(e.clipboardData.files).filter((file) =>
+      file.type.startsWith("image/")
+    );
+    if (images.length === 0) return;
+    e.preventDefault();
+    attachments.add(images);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -316,27 +349,92 @@ export function MessageView({
 
       <div className="shrink-0 px-3 pb-4 pt-2 sm:px-6">
         {sendError && <p className="mb-2 text-xs text-amber-300">{sendError}</p>}
-        <div className="flex items-end gap-2 rounded-2xl border border-white/[0.08] bg-ink-850/80 p-2 transition-colors focus-within:border-rain-400/40 focus-within:ring-2 focus-within:ring-rain-400/20">
-          <textarea
-            ref={inputRef}
-            rows={1}
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              resizeInput();
-            }}
-            onKeyDown={handleKeyDown}
-            placeholder={`Message ${title}`}
-            className="max-h-40 flex-1 resize-none bg-transparent px-2.5 py-2 text-[15px] text-white placeholder-ink-500 focus:outline-none"
-          />
-          <button
-            onClick={sendMessage}
-            disabled={!draft.trim()}
-            aria-label="Send message"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rain-400 to-iris-400 text-ink-950 transition-all hover:brightness-110 disabled:from-ink-700 disabled:to-ink-700 disabled:text-ink-500"
-          >
-            <FiSend size={15} />
-          </button>
+        {attachments.notice && (
+          <p className="mb-2 text-xs text-amber-300">{attachments.notice}</p>
+        )}
+        <div className="rounded-2xl border border-white/[0.08] bg-ink-850/80 p-2 transition-colors focus-within:border-rain-400/40 focus-within:ring-2 focus-within:ring-rain-400/20">
+          {attachments.drafts.length > 0 && (
+            <ul className="flex flex-wrap gap-2 px-1 pb-2 pt-1">
+              {attachments.drafts.map((item) => (
+                <li key={item.localId} className="relative">
+                  <img
+                    src={item.previewUrl}
+                    alt=""
+                    className={`h-16 w-16 rounded-xl border object-cover ${
+                      item.error ? "border-red-400/60 opacity-50" : "border-white/10"
+                    }`}
+                  />
+                  {!item.attachment && !item.error && (
+                    // Upload progress as a bar along the bottom of the thumbnail
+                    <span className="absolute inset-x-1 bottom-1 h-1 overflow-hidden rounded-full bg-ink-950/70">
+                      <span
+                        className="block h-full bg-rain-400 transition-[width]"
+                        style={{ width: `${Math.round(item.progress * 100)}%` }}
+                      />
+                    </span>
+                  )}
+                  {item.error && (
+                    <span
+                      title={item.error}
+                      className="absolute inset-0 flex items-center justify-center rounded-xl text-center text-[10px] font-medium leading-tight text-red-200"
+                    >
+                      Failed
+                    </span>
+                  )}
+                  <button
+                    onClick={() => attachments.remove(item.localId)}
+                    aria-label="Remove image"
+                    className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-white/10 bg-ink-800 text-ink-200 hover:bg-red-500 hover:text-white"
+                  >
+                    <FiX size={11} />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex items-end gap-2">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={attachments.drafts.length >= MAX_ATTACHMENTS_PER_MESSAGE}
+              aria-label="Attach images"
+              title="Attach images"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ink-300 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-40"
+            >
+              <FiImage size={17} />
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={ACCEPTED_IMAGE_TYPES}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                attachments.add(Array.from(e.target.files ?? []));
+                e.target.value = "";
+              }}
+            />
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={draft}
+              onChange={(e) => {
+                setDraft(e.target.value);
+                resizeInput();
+              }}
+              onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
+              placeholder={`Message ${title}`}
+              className="max-h-40 min-w-0 flex-1 resize-none bg-transparent px-1 py-2 text-[15px] text-white placeholder-ink-500 focus:outline-none"
+            />
+            <button
+              onClick={sendMessage}
+              disabled={!canSend}
+              aria-label="Send message"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-rain-400 to-iris-400 text-ink-950 transition-all hover:brightness-110 disabled:from-ink-700 disabled:to-ink-700 disabled:text-ink-500"
+            >
+              <FiSend size={15} />
+            </button>
+          </div>
         </div>
         <p className="mt-1.5 hidden px-1 text-[11px] text-ink-500 sm:block">
           <kbd className="font-sans">Enter</kbd> to send ·{" "}

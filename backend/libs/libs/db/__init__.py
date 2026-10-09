@@ -17,6 +17,8 @@ from libs.db.base import (
     generate_timestamp_iso,
 )
 from libs.db.models import (
+    MAX_ATTACHMENTS_PER_MESSAGE,
+    Attachment,
     BIO_MAX_LENGTH,
     CALLABLE_CHANNEL_TYPES,
     DIRECT_CHANNEL_TYPES,
@@ -38,6 +40,8 @@ from libs.db.models import (
 from libs.db.session import create_engine, create_session_factory
 
 __all__ = [
+    "MAX_ATTACHMENTS_PER_MESSAGE",
+    "Attachment",
     "BIO_MAX_LENGTH",
     "CALLABLE_CHANNEL_TYPES",
     "DIRECT_CHANNEL_TYPES",

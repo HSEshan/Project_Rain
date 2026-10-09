@@ -23,8 +23,21 @@
 :8081 {
     encode gzip
 
-    # --- API (HTTP) ---
+    # --- Uploaded images --- the media volume rest_api writes to. Keys are
+    # never reused, so every object is cacheable forever.
+    handle_path /media/* {
+        root * /srv/media
+        header Cache-Control "public, max-age=31536000, immutable"
+        header X-Content-Type-Options nosniff
+        file_server
+    }
+
+    # --- API (HTTP) --- body limit just above rest_api's MAX_UPLOAD_BYTES
+    # (8 MB), and equal to nginx.conf.example's client_max_body_size.
     handle_path /api/* {
+        request_body {
+            max_size 10MB
+        }
         reverse_proxy rest_api:8000
     }
 

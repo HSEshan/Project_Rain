@@ -19,6 +19,7 @@ export const BIO_MAX_LENGTH = 190;
 export type UserProfile = {
   id: string;
   username: string;
+  avatar_url: string | null;
   /** Null when nobody has written one. Never HTML, and never rendered as any. */
   bio: string | null;
   created_at: string;

@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Optional
 
 from libs.db.base import Base, generate_id, generate_timestamp
+from libs.media import media_url
 from sqlalchemy import UUID, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,6 +31,9 @@ class User(Base):
     bio: Mapped[Optional[str]] = mapped_column(
         String(BIO_MAX_LENGTH), nullable=True
     )
+    # Storage key of the avatar, never a URL: the URL depends on where media is
+    # served from (see libs.media), and a key survives a change of backend.
+    avatar_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=generate_timestamp
     )
@@ -38,3 +42,8 @@ class User(Base):
         default=generate_timestamp,
         onupdate=generate_timestamp,
     )
+
+    @property
+    def avatar_url(self) -> Optional[str]:
+        """What response models read. The key stays server-side."""
+        return media_url(self.avatar_key)

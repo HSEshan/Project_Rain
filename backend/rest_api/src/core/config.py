@@ -89,6 +89,23 @@ class SettingsFactory(BaseSettings):
     # proxies it). Not a full URL: rest_api does not know the public host.
     LIVEKIT_PUBLIC_PATH: str = "/livekit"
 
+    # Uploaded images (Phase 19). `local` writes to MEDIA_ROOT, a volume Caddy
+    # serves at /media; `s3` writes to S3_BUCKET, which CloudFront serves at
+    # the same path (aws/). Either way the URL is `/media/{key}`, so nothing
+    # outside src/media/storage.py knows which one is running. The defaults are
+    # the local backend, so dev and the VPS need no new env lines and the dev
+    # path never needs AWS credentials.
+    STORAGE_BACKEND: str = "local"
+    MEDIA_ROOT: str = "/data/media"
+    S3_BUCKET: str = ""
+    # Credentials are never configured here: boto3's default chain finds the
+    # EC2 instance role. An access key in an env file is a key on a disk.
+    S3_REGION: str = ""
+    # The largest upload accepted, before re-encoding. The edge enforces a
+    # slightly larger body limit (Caddyfile, nginx.conf.example) so the app's
+    # readable 413 is what a person sees, not a proxy's.
+    MAX_UPLOAD_BYTES: int = 8 * 1024 * 1024
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

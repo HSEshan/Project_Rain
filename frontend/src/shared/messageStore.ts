@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { Message } from "./types";
+import type { Attachment, Message } from "./types";
 import { getChannelMessages } from "./messageApiClient";
 import { eventBus } from "../utils/EventBus";
 import { onResync } from "./resync";
@@ -115,12 +115,16 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
 }));
 
 eventBus.on(EventType.MESSAGE, (event: EventPayload) => {
+  // The gateway rewrites a message's metadata to carry exactly the attachments
+  // it claimed, as the same objects the history endpoint returns.
+  const metadata = event.metadata as { attachments?: Attachment[] } | undefined;
   useMessageStore.getState().addMessage({
     id: event.event_id,
     content: event.text,
     sender_id: event.sender_id,
     channel_id: event.receiver_id,
     created_at: event.timestamp,
+    attachments: metadata?.attachments ?? [],
   });
 });
 

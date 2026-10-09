@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link, useMatch, useParams } from "react-router-dom";
 import { FiHash, FiPlus, FiUserPlus, FiVolume2 } from "react-icons/fi";
 import { useGuildStore } from "./guildStore";
@@ -9,6 +9,9 @@ import { ChannelType, type Channel } from "../shared/types";
 import { useVoiceStore } from "../voice/voiceStore";
 import Avatar from "../shared/Avatar";
 import SidePanel from "../shared/SidePanel";
+import ImageEditButton from "../media/ImageEditButton";
+import { putGuildIcon } from "../media/apiClient";
+import { GuildMemberRole } from "./types";
 
 function ChannelLink({
   channel,
@@ -108,7 +111,19 @@ export default function GuildChannelsBar() {
   const voiceChannels = guildChannels.filter(
     (channel) => channel.type === ChannelType.GUILD_VOICE
   );
-  const isOwner = !!guild && guild.owner_id === getCurrentUser()?.id;
+  const selfId = getCurrentUser()?.id;
+  const isOwner = !!guild && guild.owner_id === selfId;
+  // The server's rule for the icon is the admin role (the owner holds it from
+  // creation). The member list may not be loaded yet, so the owner check covers
+  // the common case until it is. A wrong guess here only costs a 403.
+  const selfRole = useGuildStore(
+    (state) =>
+      state.members[guildId ?? ""]?.find((member) => member.user_id === selfId)
+        ?.role
+  );
+  const isAdmin = isOwner || selfRole === GuildMemberRole.ADMIN;
+  const replaceGuild = useGuildStore((state) => state.replaceGuild);
+  const [iconError, setIconError] = useState("");
 
   const { fetchRoster, rosters } = useVoiceStore();
   const fetchUsers = useUserStore((state) => state.fetchUsers);
@@ -133,11 +148,37 @@ export default function GuildChannelsBar() {
     // so on a phone it is the page rather than a drawer behind an empty state.
     <SidePanel label="Channels" tourId="guild-channels" inline={!channelId}>
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-white/[0.06] px-4">
-        <Avatar name={guild?.name} seed={guild?.id ?? ""} size="sm" />
+        {isAdmin && guild ? (
+          <ImageEditButton
+            label="Change the guild icon"
+            badgeSize="sm"
+            onUpload={async (file) => replaceGuild(await putGuildIcon(guild.id, file))}
+            onError={setIconError}
+          >
+            <Avatar
+              name={guild.name}
+              seed={guild.id}
+              src={guild.icon_url ?? null}
+              size="sm"
+            />
+          </ImageEditButton>
+        ) : (
+          <Avatar
+            name={guild?.name}
+            seed={guild?.id ?? ""}
+            src={guild?.icon_url ?? null}
+            size="sm"
+          />
+        )}
         <h2 className="truncate text-[15px] font-semibold text-white">
           {guild?.name ?? "Guild"}
         </h2>
       </div>
+      {iconError && (
+        <p className="border-b border-white/[0.06] px-4 py-2 text-xs text-red-300">
+          {iconError}
+        </p>
+      )}
 
       <div className="flex-1 overflow-y-auto px-2 pb-3">
         <SectionLabel>Text channels</SectionLabel>

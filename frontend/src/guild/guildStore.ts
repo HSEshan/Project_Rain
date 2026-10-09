@@ -23,6 +23,8 @@ export interface GuildStore {
   getGuild: (guildId: string) => Guild | undefined;
   getMembers: (guildId: string) => GuildMember[];
   addGuild: (guild: Guild) => void;
+  /** Swap in a guild the server just returned, e.g. after an icon change. */
+  replaceGuild: (guild: Guild) => void;
   modalOpen: boolean;
   setModalOpen: (modalOpen: boolean) => void;
   channelModalGuildId: string | null;
@@ -56,6 +58,10 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
         ? state
         : { guilds: [...state.guilds, guild] }
     ),
+  replaceGuild: (guild) =>
+    set((state) => ({
+      guilds: state.guilds.map((g) => (g.id === guild.id ? guild : g)),
+    })),
   modalOpen: false,
   setModalOpen: (modalOpen) => set({ modalOpen }),
   channelModalGuildId: null,

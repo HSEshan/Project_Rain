@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from fastapi import Depends
+from fastapi import Depends, UploadFile
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -20,6 +20,9 @@ from src.database.core import get_db
 from src.database.service import BaseService
 from src.guild.repository import GuildRepository
 from src.guild.schemas import GuildCreate, GuildInviteSummary
+from src.media.images import ImageKind
+from src.media.service import store_image
+from src.media.storage import delete_quietly
 from src.realtime import events
 from src.realtime.publisher import realtime_publisher
 from src.utils.exceptions import (
@@ -341,6 +344,58 @@ class GuildService(BaseService):
             )
         )
         return True
+
+    async def set_icon(
+        self, user: CurrentUser, guild_id: str, upload: UploadFile
+    ) -> Guild:
+        """Replace the icon. Stored first, old object deleted after the commit.
+
+        Checked before the upload is processed, so a non-admin cannot make the
+        server decode an image it is only going to refuse to keep.
+        """
+        async with self.db.begin():
+            await self._require_admin(user.id, guild_id)
+        key, _ = await store_image(upload, ImageKind.ICON, f"guild-icons/{guild_id}")
+        return await self._swap_icon(user, guild_id, key)
+
+    async def clear_icon(self, user: CurrentUser, guild_id: str) -> Guild:
+        return await self._swap_icon(user, guild_id, None)
+
+    async def _swap_icon(
+        self, user: CurrentUser, guild_id: str, key: str | None
+    ) -> Guild:
+        async with self.db.begin():
+            # Checked again inside the transaction that writes: the admin may
+            # have been demoted while the image was being processed.
+            try:
+                await self._require_admin(user.id, guild_id)
+            except ForbiddenException:
+                await delete_quietly([key])
+                raise
+            guild = await self.get_guild_by_id(guild_id)
+            old_key, guild.icon_key = guild.icon_key, key
+        # No realtime event: other members see the new icon on their next
+        # guild fetch, like a renamed bio. The response is how the admin who
+        # changed it finds out, because rest_api does not publish to the actor.
+        await delete_quietly([old_key])
+        return guild
+
+    async def _require_admin(self, user_id: str, guild_id: str) -> None:
+        """The same rule `remove_guild_member` applies, in one place for icons.
+
+        Phase 18 replaces this with a real permission check; until then an
+        admin is the role the guild's creator gets.
+        """
+        member = await self.db.execute(
+            select(GuildMember).where(
+                GuildMember.guild_id == guild_id, GuildMember.user_id == user_id
+            )
+        )
+        member = member.scalar_one_or_none()
+        if not member:
+            raise NotFoundException("Guild not found")
+        if member.role != GuildMemberRole.ADMIN:
+            raise ForbiddenException("Only a guild admin can change the icon")
 
     async def get_guild_members(self, guild_id: str) -> list[GuildMember]:
         guild_members = await self.db.execute(

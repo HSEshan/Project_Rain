@@ -1,0 +1,10 @@
+# Terraform state holds every generated secret in plain text (the database
+# password, the origin secret). Never commit it.
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform.tfstate.lock.info
+terraform/terraform.tfvars
+terraform/*.tfplan
+# Release tarballs and SSM command payloads built by the scripts
+.build/

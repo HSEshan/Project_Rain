@@ -3,6 +3,7 @@ from enum import Enum
 from typing import Optional
 
 from libs.db.base import Base, generate_id, generate_timestamp
+from libs.media import media_url
 from sqlalchemy import UUID, DateTime
 from sqlalchemy import Enum as SQLAlchemyEnum
 from sqlalchemy import ForeignKey, String
@@ -20,6 +21,9 @@ class Guild(Base):
     owner_id: Mapped[str] = mapped_column(
         UUID, ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
+    # Storage key, like `User.avatar_key`. Null is the common case: the letter
+    # avatar is what most guilds will ever show.
+    icon_key: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=generate_timestamp
     )
@@ -28,6 +32,10 @@ class Guild(Base):
         default=generate_timestamp,
         onupdate=generate_timestamp,
     )
+
+    @property
+    def icon_url(self) -> Optional[str]:
+        return media_url(self.icon_key)
 
 
 class GuildMemberStatus(Enum):

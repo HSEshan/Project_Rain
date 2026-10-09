@@ -137,7 +137,12 @@ export default function HomePage() {
                     onClick={() => navigate(`/guild/${guild.id}`)}
                     className="group flex items-center gap-2.5 rounded-xl border border-white/[0.07] bg-white/[0.02] py-2 pl-2 pr-3.5 transition-all hover:border-rain-400/30 hover:bg-white/[0.05]"
                   >
-                    <Avatar name={guild.name} seed={guild.id} size="sm" />
+                    <Avatar
+                      name={guild.name}
+                      seed={guild.id}
+                      src={guild.icon_url ?? null}
+                      size="sm"
+                    />
                     <span className="max-w-[12rem] truncate text-sm text-ink-100">
                       {guild.name}
                     </span>

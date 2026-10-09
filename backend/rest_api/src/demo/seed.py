@@ -49,6 +49,7 @@ from src.demo.data import (
     DEMO_GUILD_NAME,
     DEMO_USERNAME,
 )
+from src.media.storage import delete_quietly
 from src.utils.hashing import get_password_hash
 
 logger = structlog.get_logger()
@@ -282,13 +283,22 @@ async def _delete_channels(db: AsyncSession, channel_ids: list[str]) -> None:
     await db.execute(delete(Channel).where(Channel.id.in_(channel_ids)))
 
 
-async def reset_demo_state(db: AsyncSession) -> User:
+async def reset_demo_state(
+    db: AsyncSession, stale_media: list[str] | None = None
+) -> User:
     """Return the demo account to exactly what `data.DEMO` describes.
 
     A visitor can do anything a real user can: send messages, create a guild,
     add a channel, send a friend request. Without this the account would
     accumulate every visitor's leftovers, and the next person would be reading
     a stranger's chat. Called on every demo login.
+
+    Images a visitor uploaded are undone too. Avatars on the seeded accounts
+    and the demo guild's icon are cleared here, and their storage keys are
+    appended to `stale_media` for the caller to delete *after* its commit (same
+    rule as publishing). Message attachments need nothing: deleting a message
+    sets its attachments' `message_id` to null, and the media sweep collects
+    them like any other unsent upload.
 
     Deliberately not published as realtime events. A second visitor who is
     signed in at the same moment will see a stale view until their next fetch,
@@ -304,6 +314,18 @@ async def reset_demo_state(db: AsyncSession) -> User:
         )
     )
     demo_guild = guild_result.scalar_one()
+
+    # --- images a visitor uploaded ---------------------------------------
+    # The seed defines no avatars and no icon, so anything set is a visitor's.
+    for user in users.values():
+        if user.avatar_key:
+            if stale_media is not None:
+                stale_media.append(user.avatar_key)
+            user.avatar_key = None
+    if demo_guild.icon_key:
+        if stale_media is not None:
+            stale_media.append(demo_guild.icon_key)
+        demo_guild.icon_key = None
 
     # --- guilds the visitor created --------------------------------------
     stray_guilds = await db.execute(
@@ -465,9 +487,11 @@ async def _seed_messages(
 
 async def seed_demo(session_factory) -> None:
     """Create the demo account if missing and reset it. One transaction."""
+    stale_media: list[str] = []
     async with session_factory() as session:
         async with session.begin():
-            await reset_demo_state(session)
+            await reset_demo_state(session, stale_media)
+    await delete_quietly(stale_media)
     logger.info("Demo data is seeded")
 
 

@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, UploadFile, status
 from src.auth.utils import user_dependency
-from src.guild.schemas import GuildCreate, GuildInviteSummary, GuildMemberInvite
+from src.guild.schemas import (
+    GuildCreate,
+    GuildInviteSummary,
+    GuildMemberInvite,
+    GuildResponse,
+)
 from src.guild.service import GuildService, get_guild_service
 
 router = APIRouter(prefix="/guilds", tags=["guilds"])
 
 
-@router.get("/me", status_code=status.HTTP_200_OK)
+@router.get("/me", response_model=list[GuildResponse], status_code=status.HTTP_200_OK)
 async def get_user_guilds(
     user: user_dependency,
     guild_service: GuildService = Depends(get_guild_service),
@@ -27,7 +32,7 @@ async def get_user_guild_invites(
     return await guild_service.get_user_guild_invites(user)
 
 
-@router.get("/{guild_id}", status_code=status.HTTP_200_OK)
+@router.get("/{guild_id}", response_model=GuildResponse, status_code=status.HTTP_200_OK)
 async def get_guild_by_id(
     guild_id: str,
     user: user_dependency,
@@ -46,7 +51,7 @@ async def get_guild_members(
     return await guild_service.get_guild_members(guild_id)
 
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=GuildResponse, status_code=status.HTTP_201_CREATED)
 async def create_guild(
     guild: GuildCreate,
     user: user_dependency,
@@ -104,3 +109,24 @@ async def remove_guild_member(
     return await guild_service.remove_guild_member(
         user=user, member_id=member_id, guild_id=guild_id
     )
+
+
+@router.put("/{guild_id}/icon", response_model=GuildResponse)
+async def set_guild_icon(
+    guild_id: str,
+    file: UploadFile,
+    user: user_dependency,
+    guild_service: GuildService = Depends(get_guild_service),
+):
+    """Replace the guild's icon. Admins only."""
+    return await guild_service.set_icon(user, guild_id, file)
+
+
+@router.delete("/{guild_id}/icon", response_model=GuildResponse)
+async def clear_guild_icon(
+    guild_id: str,
+    user: user_dependency,
+    guild_service: GuildService = Depends(get_guild_service),
+):
+    """Back to the letter icon. Admins only."""
+    return await guild_service.clear_icon(user, guild_id)

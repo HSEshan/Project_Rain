@@ -3,6 +3,8 @@ export type Guild = {
   name: string;
   description: string;
   owner_id: string;
+  /** Null for most guilds; the letter icon is the common case. */
+  icon_url?: string | null;
   created_at: string;
   updated_at: string;
 };

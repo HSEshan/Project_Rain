@@ -1,0 +1,20 @@
+# Copy to terraform.tfvars (gitignored) and fill in. Everything except
+# alert_email has a default; see variables.tf for what each one does.
+
+alert_email = "you@example.com"
+
+# monthly_budget_usd = 20
+# region             = "us-east-1"
+
+# The instance. t4g.small is arm64; switch both together for an x86 type.
+# instance_type = "t4g.small"
+# architecture  = "arm64"
+
+# Managed Postgres instead of a container on the instance. Roughly doubles the
+# hourly cost. Changing this on a running stack does NOT migrate data.
+# use_rds = false
+
+# Optional custom domain. The certificate must already be issued in us-east-1,
+# and you add the CNAME (to the cloudfront_domain output) at your DNS provider.
+# domain_name         = "rain.example.com"
+# acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."

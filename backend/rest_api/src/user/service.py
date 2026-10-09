@@ -1,4 +1,4 @@
-from fastapi import Depends
+from fastapi import Depends, UploadFile
 from libs.db import (
     Channel,
     ChannelMember,
@@ -13,6 +13,9 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.database.core import get_db
 from src.database.service import BaseService
+from src.media.images import ImageKind
+from src.media.service import store_image
+from src.media.storage import delete_quietly
 from src.user.repository import UserRepository
 from src.user.schemas import (
     BulkUserRequest,
@@ -36,7 +39,12 @@ class UserService(BaseService):
         users = await UserRepository.get_users_by_ids(self.db, request.ids)
         return BulkUserResponse(
             users=[
-                UserResponse(id=str(user.id), username=user.username) for user in users
+                UserResponse(
+                    id=str(user.id),
+                    username=user.username,
+                    avatar_url=user.avatar_url,
+                )
+                for user in users
             ]
         )
 
@@ -55,6 +63,7 @@ class UserService(BaseService):
         return UserProfile(
             id=user_id,
             username=user.username,
+            avatar_url=user.avatar_url,
             bio=user.bio,
             created_at=user.created_at,
             friend_state=await self._friend_state(viewer_id, user_id),
@@ -85,6 +94,28 @@ class UserService(BaseService):
         # store it already renders from. rest_api excludes the actor from the
         # events it publishes, so this response *is* how the person who made the
         # change finds out it worked — there is no event coming.
+        return await self.get_profile(user_id, user_id)
+
+    async def set_avatar(self, user_id: str, upload: UploadFile) -> UserProfile:
+        """Replace your avatar. Same `me`-only shape as `update_me`.
+
+        The new object is written first and the old one deleted only after the
+        row points at the new one, so there is no moment where the avatar URL
+        names nothing. The old key is deleted rather than kept: keys are never
+        reused, so an old avatar nobody references is only storage cost.
+        """
+        key, _ = await store_image(upload, ImageKind.AVATAR, f"avatars/{user_id}")
+        async with self.db.begin():
+            user = await UserRepository.get_user_by_id(self.db, user_id)
+            old_key, user.avatar_key = user.avatar_key, key
+        await delete_quietly([old_key])
+        return await self.get_profile(user_id, user_id)
+
+    async def clear_avatar(self, user_id: str) -> UserProfile:
+        async with self.db.begin():
+            user = await UserRepository.get_user_by_id(self.db, user_id)
+            old_key, user.avatar_key = user.avatar_key, None
+        await delete_quietly([old_key])
         return await self.get_profile(user_id, user_id)
 
     async def _friend_state(self, viewer_id: str, user_id: str) -> FriendState:

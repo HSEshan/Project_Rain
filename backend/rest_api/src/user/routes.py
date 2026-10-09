@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, UploadFile
 from src.auth.utils import user_dependency
 from src.user.schemas import (
     BulkUserRequest,
@@ -49,6 +49,25 @@ async def update_me(
     cannot fail to check which one it was given.
     """
     return await user_service.update_me(current_user.id, update)
+
+
+@router.put("/me/avatar", response_model=UserProfile)
+async def set_my_avatar(
+    file: UploadFile,
+    current_user: user_dependency,
+    user_service: UserService = Depends(get_user_service),
+):
+    """Upload a new avatar. PNG, JPEG, WebP or GIF; cropped square and re-encoded."""
+    return await user_service.set_avatar(current_user.id, file)
+
+
+@router.delete("/me/avatar", response_model=UserProfile)
+async def clear_my_avatar(
+    current_user: user_dependency,
+    user_service: UserService = Depends(get_user_service),
+):
+    """Go back to the letter avatar."""
+    return await user_service.clear_avatar(current_user.id)
 
 
 @router.get("/{user_id}/profile", response_model=UserProfile)

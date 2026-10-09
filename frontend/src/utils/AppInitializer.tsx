@@ -3,6 +3,7 @@ import { useChannelStore } from "../shared/channelStore";
 import { useGuildStore } from "../guild/guildStore";
 import { useUserStore } from "../shared/userStore";
 import { useFriendStore } from "../friends/friendStore";
+import { useAuth } from "../auth/AuthContext";
 
 export default function AppInitializer() {
   const { fetchUserGuilds, fetchInvites } = useGuildStore();
@@ -17,6 +18,15 @@ export default function AppInitializer() {
     friendRequests,
     outgoingRequests,
   } = useFriendStore();
+
+  const selfId = useAuth().getCurrentUser()?.id;
+
+  // Yourself, in the same store as everyone else, so your own avatar renders
+  // wherever your id does. The auth cookie carries an id and a name, not a
+  // picture.
+  useEffect(() => {
+    if (selfId) void fetchUsers([selfId]);
+  }, [selfId, fetchUsers]);
 
   useEffect(() => {
     const initializeApp = async () => {

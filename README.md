@@ -243,3 +243,12 @@ env files with `python generate_env_files.py --prod`.
 LiveKit media needs **7882/udp** (and 7881/tcp as a fallback) open on both the
 host firewall and the provider's security group - no reverse proxy can carry it,
 and a closed port fails as "voice connects, then nobody can hear anyone".
+
+Uploaded images live in the `media_data` volume (served by Caddy at `/media`).
+Back it up alongside the database.
+
+### AWS
+
+`aws/` stands the same stack up on AWS (EC2, S3, CloudFront, CloudWatch,
+optionally RDS) with Terraform, and tears it down again. It is a proof of
+concept alongside the VPS, not a replacement. Start with `aws/README.md`.

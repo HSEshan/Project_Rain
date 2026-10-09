@@ -1,9 +1,22 @@
+/** An uploaded image. `url` is always same-origin `/media/...`. */
+export type Attachment = {
+  id: string;
+  url: string;
+  content_type: string;
+  width: number;
+  height: number;
+  size_bytes: number;
+};
+
 export type Message = {
   id: string;
+  /** Empty when the message is only images. */
   content: string;
   sender_id: string;
   channel_id: string;
   created_at: string;
+  /** In the order they were composed. Absent on messages from older clients. */
+  attachments?: Attachment[];
 };
 
 export enum ChannelType {

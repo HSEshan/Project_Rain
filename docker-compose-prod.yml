@@ -44,6 +44,11 @@ services:
     command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
     env_file:
       - ./rest_api.env
+    # Uploaded images. Back this volume up with the database: a restored dump
+    # whose avatar keys point at files that no longer exist renders as letter
+    # avatars, which is survivable, but it is data loss all the same.
+    volumes:
+      - media_data:/data/media
     environment:
       - ENVIRONMENT=production
       - LOG_LEVEL=INFO
@@ -176,9 +181,11 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+      - media_data:/srv/media:ro
 
 volumes:
   postgres_data:
   redis_data:
+  media_data:
   caddy_data:
   caddy_config:

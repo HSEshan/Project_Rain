@@ -1,0 +1,52 @@
+# Origin edge on the AWS instance. CloudFront is the only client: it
+# terminates TLS, serves the frontend and /media from S3, and forwards /api,
+# /ws and /livekit here over plain HTTP on :80.
+#
+# Two locks keep this origin from being used around CloudFront:
+#   1. the security group only admits CloudFront's address ranges on :80
+#   2. every request must carry the secret header CloudFront adds
+# The first stops strangers; the second stops someone else's CloudFront
+# distribution, which comes from the same address ranges.
+
+{
+    # Every peer is a CloudFront edge (the security group allows nothing
+    # else), so X-Forwarded-For from any peer is CloudFront's and is trusted
+    # for the client address in logs.
+    servers {
+        trusted_proxies static 0.0.0.0/0 ::/0
+    }
+}
+
+:80 {
+    encode gzip
+
+    @from_cloudfront header X-Origin-Verify {$ORIGIN_VERIFY_SECRET}
+
+    handle @from_cloudfront {
+        # Same 10 MB body limit as the VPS edge; rest_api's own limit is 8 MB
+        handle_path /api/* {
+            request_body {
+                max_size 10MB
+            }
+            reverse_proxy rest_api:8000
+        }
+
+        handle_path /ws* {
+            reverse_proxy ws_gateway:8000
+        }
+
+        handle_path /livekit/* {
+            reverse_proxy livekit:7880
+        }
+
+        # The frontend and /media never reach the instance; CloudFront routes
+        # them to S3. Anything else arriving here is a routing mistake.
+        handle {
+            respond "Not found" 404
+        }
+    }
+
+    handle {
+        respond "Forbidden" 403
+    }
+}

@@ -4,6 +4,7 @@ from src.channel.routes import router as channel_router
 from src.demo.routes import router as demo_router
 from src.friendship.routes import router as friendship_router
 from src.guild.routes import router as guild_router
+from src.media.routes import router as media_router
 from src.message.routes import router as message_router
 from src.user.routes import router as user_router
 from src.voice.routes import router as voice_router
@@ -17,6 +18,7 @@ master_router.include_router(friendship_router)
 master_router.include_router(channel_router)
 master_router.include_router(message_router)
 master_router.include_router(user_router)
+master_router.include_router(media_router)
 # Public and tokenless. Returns a token for one server-chosen account, and
 # only while DEMO_ENABLED is set.
 master_router.include_router(demo_router)

@@ -4,6 +4,8 @@ import { getUsers } from "./userApiClient";
 export interface User {
   id: string;
   username: string;
+  /** Null for anyone who has not uploaded one; `Avatar` falls back to initials. */
+  avatar_url?: string | null;
 }
 
 export interface UserStore {

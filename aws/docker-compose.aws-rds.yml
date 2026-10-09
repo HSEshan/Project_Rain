@@ -1,0 +1,21 @@
+# Added on top of docker-compose.aws.yml when Terraform's use_rds is true.
+# Postgres is RDS, so the container is not started and nothing waits on it.
+# POSTGRES_HOST and the credentials in the env files are pointed at RDS by
+# aws/instance/apply_overrides.py.
+
+services:
+  postgres:
+    profiles: ["local-db"]
+
+  rest_api:
+    depends_on: !override
+      redis:
+        condition: service_healthy
+
+  ws_gateway:
+    depends_on: !override
+      redis:
+        condition: service_healthy
+      # rest_api runs the migrations; the gateway still waits for them
+      rest_api:
+        condition: service_healthy

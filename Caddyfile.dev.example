@@ -7,8 +7,25 @@
 :8080 {
     encode gzip
 
+    # --- Uploaded images --- written by rest_api into the shared media volume.
+    # Keys are never reused, so every object can be cached forever. nosniff so
+    # a browser never second-guesses the type: everything here is a WebP that
+    # rest_api encoded itself.
+    handle_path /media/* {
+        root * /srv/media
+        header Cache-Control "public, max-age=31536000, immutable"
+        header X-Content-Type-Options nosniff
+        file_server
+    }
+
     # --- API (HTTP) --- rest_api sets root_path=/api, so strip the prefix here
     handle_path /api/* {
+        # A little above rest_api's MAX_UPLOAD_BYTES (8 MB), so the app's
+        # readable 413 is what a person sees, and anything far larger is cut
+        # off here before it is read.
+        request_body {
+            max_size 10MB
+        }
         reverse_proxy rest_api:8000 {
             header_up Host {host}
             header_up X-Real-IP {remote_host}
