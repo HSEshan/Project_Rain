@@ -75,7 +75,11 @@ services:
     build:
       context: ./backend
       dockerfile: ws_gateway/Dockerfile
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+    # This, not the Dockerfile's CMD, is what production runs. --ws-max-size: the
+    # largest honest frame is a 4000 character message, escaped. uvicorn's default
+    # is 16 MB, read and parsed before anything can look at it.
+    command:
+      ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--ws-max-size", "65536"]
     env_file:
       - ./ws_gateway.env
     environment:
