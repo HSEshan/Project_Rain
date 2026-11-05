@@ -22,6 +22,10 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Non-root user for safety
 RUN useradd -m appuser
+# Created here so the media volume starts out owned by appuser: a new named volume
+# copies its ownership from the image, and without this it is root's and every
+# upload fails. Dev runs as root, so only production can show this.
+RUN mkdir -p /data/media && chown appuser:appuser /data/media
 USER appuser
 
 # Expose API port
