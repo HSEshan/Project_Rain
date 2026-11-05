@@ -12,3 +12,15 @@ export const getChannelMessages = async (
     return [];
   }
 };
+
+export const patchMessage = async (
+  messageId: string,
+  content: string
+): Promise<Message> => {
+  const response = await apiClient.patch(`/messages/${messageId}`, { content });
+  return response.data;
+};
+
+export const deleteMessage = async (messageId: string): Promise<void> => {
+  await apiClient.delete(`/messages/${messageId}`);
+};

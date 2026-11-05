@@ -15,6 +15,8 @@ export type Message = {
   sender_id: string;
   channel_id: string;
   created_at: string;
+  /** Null until someone edits it. */
+  edited_at?: string | null;
   /** In the order they were composed. Absent on messages from older clients. */
   attachments?: Attachment[];
 };

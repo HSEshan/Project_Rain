@@ -5,11 +5,9 @@ from libs.db import (
     ChannelMember,
     ChannelType,
     GuildMember,
-    GuildMemberRole,
-    Message,
     User,
 )
-from sqlalchemy import delete, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.auth.utils import CurrentUser
 from src.channel.repository import ChannelRepository
@@ -25,8 +23,11 @@ from src.channel.schemas import (
 from src.database.core import get_db
 from src.database.service import BaseService
 from src.friendship.repository import FriendshipRepository
+from src.guild.permissions import GuildPermission
+from src.guild.repository import GuildRepository
 from src.realtime import events
 from src.realtime.publisher import realtime_publisher
+from src.voice.room_service import close_rooms, remove_from_rooms
 from src.utils.exceptions import (
     AlreadyExistsException,
     BadRequestException,
@@ -56,15 +57,9 @@ class ChannelService(BaseService):
         self, user: CurrentUser, guild_id: str, channel_create: GuildChannelCreate
     ) -> Channel:
         async with self.db.begin():
-            # Only guild admins may add channels
-            guild_member = await self.db.execute(
-                select(GuildMember).where(
-                    GuildMember.guild_id == guild_id, GuildMember.user_id == user.id
-                )
+            await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.MANAGE_CHANNELS
             )
-            result = guild_member.scalar_one_or_none()
-            if not result or result.role != GuildMemberRole.ADMIN:
-                raise ForbiddenException("You are not an admin of this guild")
 
             new_channel = Channel(
                 name=channel_create.name,
@@ -103,6 +98,49 @@ class ChannelService(BaseService):
             for member_id in member_ids
         )
         return new_channel
+
+    async def delete_guild_channel(
+        self, user: CurrentUser, channel_id: str
+    ) -> None:
+        """Delete a guild channel and its messages.
+
+        Guild channels only. A DM has no one with the standing to delete it for
+        the other person, and a group DM ends when its last member leaves.
+        """
+        async with self.db.begin():
+            channel = await self.db.execute(
+                select(Channel).where(Channel.id == channel_id)
+            )
+            channel = channel.scalar_one_or_none()
+            if not channel:
+                raise NotFoundException("Channel not found")
+            if channel.guild_id is None:
+                raise ForbiddenException("Only guild channels can be deleted")
+            guild_id, name = str(channel.guild_id), channel.name
+
+            await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.MANAGE_CHANNELS
+            )
+            members = await self.db.execute(
+                select(ChannelMember.user_id).where(
+                    ChannelMember.channel_id == channel_id
+                )
+            )
+            member_ids = [str(member_id) for member_id in members.scalars()]
+            await ChannelRepository.delete_channels(self.db, [channel_id])
+
+        await realtime_publisher.invalidate_user_channels(*member_ids)
+        await realtime_publisher.publish_many(
+            events.channels_changed(
+                actor_id=user.id,
+                to_user_id=member_id,
+                text=f"#{name} was deleted",
+                guild_id=guild_id,
+                channel_id=channel_id,
+            )
+            for member_id in member_ids
+        )
+        await close_rooms([channel_id])
 
     async def get_channel_by_id(self, user: CurrentUser, channel_id: str) -> Channel:
         await ChannelRepository.check_channel_member(self.db, user.id, channel_id)
@@ -242,7 +280,7 @@ class ChannelService(BaseService):
                 # Nobody can ever reach this channel again, and its messages
                 # are unreachable with it. Leaving the rows behind would be an
                 # unbounded, permanently orphaned table.
-                await self._delete_channel(channel_id)
+                await ChannelRepository.delete_channels(self.db, [channel_id])
             else:
                 await self._reassign_owner_if_needed(channel_id, remaining)
 
@@ -261,6 +299,7 @@ class ChannelService(BaseService):
                 channel_id=channel_id,
                 text=f"{user.name} left the group",
             )
+        await remove_from_rooms([channel_id], str(user.id))
 
     async def update_group_dm(
         self, user: CurrentUser, channel_id: str, update: GroupDMUpdate
@@ -344,14 +383,6 @@ class ChannelService(BaseService):
         if channel.owner_id and str(channel.owner_id) in remaining:
             return
         channel.owner_id = remaining[0]
-        await self.db.flush()
-
-    async def _delete_channel(self, channel_id: str) -> None:
-        await self.db.execute(delete(Message).where(Message.channel_id == channel_id))
-        await self.db.execute(
-            delete(ChannelMember).where(ChannelMember.channel_id == channel_id)
-        )
-        await self.db.execute(delete(Channel).where(Channel.id == channel_id))
         await self.db.flush()
 
     async def _notify_members(

@@ -8,6 +8,7 @@ import { errorText } from "../shared/errors";
 import { useGuildStore } from "./guildStore";
 import { useFriendStore } from "../friends/friendStore";
 import { postGuildInvite } from "./apiClient";
+import GuildInviteLinks from "./GuildInviteLinks";
 
 type Result = { ok: boolean; text: string } | null;
 
@@ -129,6 +130,8 @@ export default function GuildInviteModal() {
             </ul>
           )}
         </div>
+
+        {guildId && <GuildInviteLinks guildId={guildId} />}
 
         {result && (
           <p

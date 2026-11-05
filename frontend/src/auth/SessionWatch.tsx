@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "./AuthContext";
-import { REFRESH_SKEW_SECONDS, refreshSession } from "./refresh";
+import { REFRESH_SKEW_SECONDS, refreshSession, sessionIsOver } from "./refresh";
 import { useWebSocket } from "../utils/WebsocketProvider";
 import { resetAllStores } from "../shared/resetStores";
 import { markSessionExpired, onSessionExpired } from "../shared/session";
@@ -75,7 +75,9 @@ export default function SessionWatch() {
     // next one.
     const timer = setTimeout(async () => {
       const renewed = await refreshSession();
-      if (!renewed) end();
+      // Not renewed and not over means try later, and later comes by itself:
+      // the next request to get a 401 lands in the interceptor's renewal.
+      if (!renewed && sessionIsOver()) end();
     }, renewIn);
 
     return () => {

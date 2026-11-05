@@ -22,6 +22,10 @@ class RediKeys:
         return f"channel:{channel_id}:voice_members"
 
     @staticmethod
+    def rate_limit(rule: str, identity: str) -> str:
+        return f"ratelimit:{rule}:{identity}"
+
+    @staticmethod
     def stream_shard(shard_id: str) -> str:
         return f"stream_shard:{shard_id}"
 

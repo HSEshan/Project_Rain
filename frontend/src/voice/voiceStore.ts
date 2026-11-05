@@ -10,6 +10,7 @@ import {
 import { create } from "zustand";
 import { eventBus } from "../utils/EventBus";
 import { onResync } from "../shared/resync";
+import { useChannelStore } from "../shared/channelStore";
 import { EventAction, EventType, type EventPayload } from "../utils/eventType";
 import { getVoiceParticipants, joinVoiceChannel, livekitUrl } from "./apiClient";
 
@@ -535,6 +536,14 @@ eventBus.on(EventType.VOICE_STATE, (event: EventPayload) => {
       : current.filter((id) => id !== userId);
     return { rosters: { ...state.rosters, [channelId]: next } };
   });
+});
+
+// A channel you are connected to can stop being yours: it was deleted, its guild
+// was, or you were removed. Nothing in the room says so, and the token stays
+// valid, so a client that did not leave would sit in a room nobody can see.
+useChannelStore.subscribe((state) => {
+  const { activeChannelId, leave } = useVoiceStore.getState();
+  if (activeChannelId && !state.channels[activeChannelId]) void leave();
 });
 
 // VOICE_STATE deltas missed during a disconnect leave the roster wrong in both

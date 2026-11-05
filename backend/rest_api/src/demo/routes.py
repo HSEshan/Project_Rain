@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Response, status
 from src.auth.cookies import set_refresh_cookie
+from src.core.rate_limit import DEMO_IP, limit_ip
 from src.demo.schemas import DemoSession, DemoStatus
 from src.demo.service import DemoService, get_demo_service
 
@@ -18,7 +19,12 @@ async def get_demo_status(demo_service: DemoService = Depends(get_demo_service))
     return demo_service.status()
 
 
-@router.post("/login", response_model=DemoSession, status_code=status.HTTP_200_OK)
+@router.post(
+    "/login",
+    response_model=DemoSession,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(limit_ip(DEMO_IP))],
+)
 async def login_as_demo(
     response: Response, demo_service: DemoService = Depends(get_demo_service)
 ):

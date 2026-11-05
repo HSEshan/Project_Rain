@@ -3,7 +3,7 @@ import type { Attachment, Message } from "./types";
 import { getChannelMessages } from "./messageApiClient";
 import { eventBus } from "../utils/EventBus";
 import { onResync } from "./resync";
-import { EventType, type EventPayload } from "../utils/eventType";
+import { EventAction, EventType, type EventPayload } from "../utils/eventType";
 
 interface MessageStore {
   messages: Record<string, Message>; // messageId -> Message object
@@ -12,12 +12,15 @@ interface MessageStore {
   addMultipleMessages: (channelId: string, msgs: Message[]) => void;
   addMessage: (msg: Message) => void;
   getChannelMessages: (channelId: string) => Message[];
+  updateMessage: (messageId: string, changes: Partial<Message>) => void;
   removeMessage: (messageId: string) => void;
   clearChannelMessages: (channelId: string) => void;
   clearAllMessages: () => void;
 
   fetchChannelMessages: (channelId: string) => void;
 }
+
+const REFETCH_MARGIN_MS = 5000;
 
 // created_at is an ISO string; ties are broken by id so ordering is stable
 const sortByCreatedAt = (ids: string[], messages: Record<string, Message>) =>
@@ -75,6 +78,18 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     return ids.map((id) => state.messages[id]);
   },
 
+  updateMessage: (messageId, changes) =>
+    set((state) => {
+      const message = state.messages[messageId];
+      if (!message) return state;
+      return {
+        messages: {
+          ...state.messages,
+          [messageId]: { ...message, ...changes },
+        },
+      };
+    }),
+
   removeMessage: (messageId) =>
     set((state) => {
       const newMessages = { ...state.messages };
@@ -110,6 +125,21 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
 
   fetchChannelMessages: async (channel_id: string) => {
     const response = await getChannelMessages(channel_id);
+    // History is the whole channel, so anything clearly older than its newest row
+    // that it no longer has was deleted, most likely while the socket was down.
+    // "Clearly" because a live message arriving as this was answered is absent
+    // for an innocent reason, and it is stamped at ingest where a row is stamped
+    // at insert. A deletion inside the margin has its own event, or the next
+    // fetch. Sorted oldest first, and empty when the fetch failed.
+    const newest = response[response.length - 1]?.created_at;
+    if (newest) {
+      const cutoff = Date.parse(newest) - REFETCH_MARGIN_MS;
+      const present = new Set(response.map((m) => m.id));
+      get()
+        .getChannelMessages(channel_id)
+        .filter((m) => !present.has(m.id) && Date.parse(m.created_at) < cutoff)
+        .forEach((m) => get().removeMessage(m.id));
+    }
     get().addMultipleMessages(channel_id, response);
   },
 }));
@@ -126,6 +156,22 @@ eventBus.on(EventType.MESSAGE, (event: EventPayload) => {
     created_at: event.timestamp,
     attachments: metadata?.attachments ?? [],
   });
+});
+
+eventBus.on(EventType.MESSAGE_UPDATE, (event: EventPayload) => {
+  const metadata = event.metadata as
+    | { action?: string; message_id?: string; edited_at?: string }
+    | undefined;
+  if (!metadata?.message_id) return;
+
+  if (metadata.action === EventAction.MESSAGE_DELETED) {
+    useMessageStore.getState().removeMessage(metadata.message_id);
+  } else if (metadata.action === EventAction.MESSAGE_EDITED) {
+    useMessageStore.getState().updateMessage(metadata.message_id, {
+      content: event.text,
+      edited_at: metadata.edited_at,
+    });
+  }
 });
 
 /**

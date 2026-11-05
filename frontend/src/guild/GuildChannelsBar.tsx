@@ -1,17 +1,25 @@
 import { useEffect, useState } from "react";
-import { Link, useMatch, useParams } from "react-router-dom";
-import { FiHash, FiPlus, FiUserPlus, FiVolume2 } from "react-icons/fi";
+import { Link, useMatch, useNavigate, useParams } from "react-router-dom";
+import {
+  FiHash,
+  FiLogOut,
+  FiPlus,
+  FiSettings,
+  FiUserPlus,
+  FiVolume2,
+} from "react-icons/fi";
 import { useGuildStore } from "./guildStore";
 import { useChannelStore } from "../shared/channelStore";
 import { useUserStore } from "../shared/userStore";
-import { useAuth } from "../auth/AuthContext";
 import { ChannelType, type Channel } from "../shared/types";
 import { useVoiceStore } from "../voice/voiceStore";
 import Avatar from "../shared/Avatar";
 import SidePanel from "../shared/SidePanel";
 import ImageEditButton from "../media/ImageEditButton";
 import { putGuildIcon } from "../media/apiClient";
-import { GuildMemberRole } from "./types";
+import { errorText } from "../shared/errors";
+import { deleteLeaveGuild } from "./apiClient";
+import { GuildPermission, allows, useGuildStanding } from "./permissions";
 
 function ChannelLink({
   channel,
@@ -76,6 +84,44 @@ function VoiceRoster({ channelId }: { channelId: string }) {
   );
 }
 
+/** Two clicks, because getting back in needs someone to invite you. */
+function LeaveGuild({ guildId }: { guildId: string }) {
+  const removeGuild = useGuildStore((state) => state.removeGuild);
+  const navigate = useNavigate();
+  const [confirming, setConfirming] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const leave = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await deleteLeaveGuild(guildId);
+      navigate("/guild");
+      removeGuild(guildId);
+    } catch (err) {
+      setError(errorText(err, "Could not leave this guild."));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <>
+      <button
+        className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-white/[0.05] ${
+          confirming ? "text-red-300" : "text-ink-300 hover:text-white"
+        }`}
+        disabled={busy}
+        onClick={() => (confirming ? void leave() : setConfirming(true))}
+        onBlur={() => setConfirming(false)}
+      >
+        <FiLogOut size={14} /> {confirming ? "Click again to leave" : "Leave guild"}
+      </button>
+      {error && <p className="px-2.5 text-xs text-red-300">{error}</p>}
+    </>
+  );
+}
+
 function SectionLabel({
   children,
   action,
@@ -98,10 +144,13 @@ export default function GuildChannelsBar() {
   // channelId belongs to a child route, so it is read from the URL directly
   const channelId = useMatch("/guild/:guildId/channel/:channelId")?.params
     .channelId;
-  const { getGuild, setChannelModalGuildId, setInviteModalGuildId } =
-    useGuildStore();
+  const {
+    getGuild,
+    setChannelModalGuildId,
+    setInviteModalGuildId,
+    setSettingsModalGuildId,
+  } = useGuildStore();
   const { getGuildChannels } = useChannelStore();
-  const { getCurrentUser } = useAuth();
 
   const guild = getGuild(guildId ?? "");
   const guildChannels = getGuildChannels(guildId ?? "");
@@ -111,17 +160,9 @@ export default function GuildChannelsBar() {
   const voiceChannels = guildChannels.filter(
     (channel) => channel.type === ChannelType.GUILD_VOICE
   );
-  const selfId = getCurrentUser()?.id;
-  const isOwner = !!guild && guild.owner_id === selfId;
-  // The server's rule for the icon is the admin role (the owner holds it from
-  // creation). The member list may not be loaded yet, so the owner check covers
-  // the common case until it is. A wrong guess here only costs a 403.
-  const selfRole = useGuildStore(
-    (state) =>
-      state.members[guildId ?? ""]?.find((member) => member.user_id === selfId)
-        ?.role
-  );
-  const isAdmin = isOwner || selfRole === GuildMemberRole.ADMIN;
+  const standing = useGuildStanding(guildId);
+  const canManageGuild = allows(standing, GuildPermission.MANAGE_GUILD);
+  const canManageChannels = allows(standing, GuildPermission.MANAGE_CHANNELS);
   const replaceGuild = useGuildStore((state) => state.replaceGuild);
   const [iconError, setIconError] = useState("");
 
@@ -148,7 +189,7 @@ export default function GuildChannelsBar() {
     // so on a phone it is the page rather than a drawer behind an empty state.
     <SidePanel label="Channels" tourId="guild-channels" inline={!channelId}>
       <div className="flex h-14 shrink-0 items-center gap-2.5 border-b border-white/[0.06] px-4">
-        {isAdmin && guild ? (
+        {canManageGuild && guild ? (
           <ImageEditButton
             label="Change the guild icon"
             badgeSize="sm"
@@ -170,9 +211,18 @@ export default function GuildChannelsBar() {
             size="sm"
           />
         )}
-        <h2 className="truncate text-[15px] font-semibold text-white">
+        <h2 className="min-w-0 flex-1 truncate text-[15px] font-semibold text-white">
           {guild?.name ?? "Guild"}
         </h2>
+        {(canManageGuild || canManageChannels) && (
+          <button
+            onClick={() => setSettingsModalGuildId(guildId ?? null)}
+            aria-label="Guild settings"
+            className="-mr-1 shrink-0 rounded-lg p-2 text-ink-400 transition-colors hover:bg-white/5 hover:text-white"
+          >
+            <FiSettings size={15} />
+          </button>
+        )}
       </div>
       {iconError && (
         <p className="border-b border-white/[0.06] px-4 py-2 text-xs text-red-300">
@@ -218,13 +268,19 @@ export default function GuildChannelsBar() {
           <FiUserPlus size={14} /> Invite people
         </button>
 
-        {isOwner && (
+        {canManageChannels && (
           <button
             className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-ink-300 transition-colors hover:bg-white/[0.05] hover:text-white"
             onClick={() => setChannelModalGuildId(guildId ?? null)}
           >
             <FiPlus size={14} /> Create channel
           </button>
+        )}
+
+        {/* The role loads with the member list. Until it has, this cannot tell a
+            member from someone it should not be offered to. */}
+        {guildId && standing.role && !standing.isOwner && (
+          <LeaveGuild guildId={guildId} />
         )}
       </div>
     </SidePanel>

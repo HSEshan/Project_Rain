@@ -88,6 +88,12 @@ class SettingsFactory(BaseSettings):
     # Path the browser reaches LiveKit on, same origin as the app (Caddy
     # proxies it). Not a full URL: rest_api does not know the public host.
     LIVEKIT_PUBLIC_PATH: str = "/livekit"
+    # How rest_api itself reaches it, inside the compose network
+    LIVEKIT_INTERNAL_URL: str = "http://livekit:7880"
+
+    # Off only in the dev compose file: the e2e suite registers dozens of accounts
+    # from one address. `tests/e2e/rate_limit_probe.py` runs with it on.
+    RATE_LIMIT_ENABLED: bool = True
 
     # Uploaded images (Phase 19). `local` writes to MEDIA_ROOT, a volume Caddy
     # serves at /media; `s3` writes to S3_BUCKET, which CloudFront serves at

@@ -1,7 +1,24 @@
 from datetime import datetime
+from typing import Optional
 
+from libs.db import MAX_MESSAGE_LENGTH
 from pydantic import BaseModel, field_validator
 from src.media.schemas import AttachmentResponse
+
+
+class MessageEdit(BaseModel):
+    content: str
+
+    @field_validator("content")
+    @classmethod
+    def _clean(cls, value: str) -> str:
+        # The socket's rules, see `build_client_event`: a NUL cannot be stored
+        value = value.replace("\x00", "")
+        if len(value) > MAX_MESSAGE_LENGTH:
+            raise ValueError(
+                f"Messages can be up to {MAX_MESSAGE_LENGTH} characters"
+            )
+        return value
 
 
 class MessageResponse(BaseModel):
@@ -17,6 +34,7 @@ class MessageResponse(BaseModel):
     sender_id: str
     channel_id: str
     created_at: datetime
+    edited_at: Optional[datetime] = None
     attachments: list[AttachmentResponse] = []
 
     @field_validator("id", "sender_id", "channel_id", mode="before")

@@ -19,6 +19,8 @@ import AddFriendModal from "./friends/AddFriendModal";
 import GuildCreateModal from "./guild/GuildCreateModal";
 import GuildChannelCreateModal from "./guild/GuildChannelCreateModal";
 import GuildInviteModal from "./guild/GuildInviteModal";
+import GuildSettingsModal from "./guild/GuildSettingsModal";
+import InvitePage from "./guild/InvitePage";
 import GuildInviteInboxModal from "./guild/GuildInviteInboxModal";
 import TourOverlay from "./tour/TourOverlay";
 import GroupDMCreateModal from "./messages/GroupDMCreateModal";
@@ -53,6 +55,7 @@ function MainLayout() {
         <GuildCreateModal />
         <GuildChannelCreateModal />
         <GuildInviteModal />
+        <GuildSettingsModal />
         <GuildInviteInboxModal />
         <GroupDMCreateModal />
         {/* Opened from anywhere a username appears, so it mounts with the
@@ -74,6 +77,8 @@ export default function App() {
         <Routes>
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<AuthPage />} />
+          {/* Outside RequireAuth: the person following it may have no account */}
+          <Route path="/invite/:code" element={<InvitePage />} />
 
           <Route element={<RequireAuth />}>
             <Route path="/home" element={<MainLayout />}>

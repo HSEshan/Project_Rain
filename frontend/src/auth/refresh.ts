@@ -64,6 +64,17 @@ export function tokenNeedsRefresh(token: string | null): boolean {
  * evidence of an expired session any more, because the failure may simply mean
  * it was time to renew.
  */
+/**
+ * After a renewal came back empty: was it refused, or just not available?
+ *
+ * Only a refusal ends a session, and the server clears the hint cookie with the
+ * refresh cookie when it refuses. So the hint still being here means the answer
+ * was something else, a 429, a 5xx, or no answer at all, and the session is fine.
+ * Treating those as expiry signs people out because of an outage, or, with a rate
+ * limit keyed on the address, because of someone else on their network.
+ */
+export const sessionIsOver = () => !hasSessionHint();
+
 export async function refreshSession(
   options: { force?: boolean } = {}
 ): Promise<string | null> {
@@ -120,9 +131,8 @@ async function renew(force: boolean): Promise<string | null> {
     return token;
   } catch {
     // 401 means the session is over and the server has already cleared the
-    // refresh cookie. Anything else is an outage, and the caller's retry or
-    // the next timer will come back here — treating both as "no token" is
-    // right because neither leaves us with one.
+    // refresh cookie. Anything else is an outage or a rate limit. Neither leaves
+    // us with a token, so both return null; `sessionIsOver` tells them apart.
     return null;
   }
 }

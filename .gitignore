@@ -100,3 +100,5 @@ backups-dev/
 backups/
 *.sql.gz
 *.sql.gz.partial
+media-*.tar
+media-*.tar.partial

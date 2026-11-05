@@ -162,6 +162,62 @@ def group_dm_updated(
     )
 
 
+def guild_updated(
+    *,
+    actor_id: str,
+    to_user_id: str,
+    guild_id: str,
+    text: str,
+) -> Event:
+    """A guild the recipient stays in changed name, roster or roles.
+
+    Goes to everyone in the guild, the actor included: the actor's own response
+    covers the tab that made the change, and this covers their other tabs. It is
+    a refetch, so hearing it twice costs nothing. Someone *leaving* the guild
+    gets `channels_changed` instead, because their membership is what changed.
+    """
+    return Event(
+        event_type=EventType.NOTIFICATION,
+        sender_id=str(actor_id),
+        receiver_id=str(to_user_id),
+        text=text,
+        metadata={
+            "action": EventAction.GUILD_UPDATED.value,
+            "guild_id": str(guild_id),
+        },
+    )
+
+
+def message_edited(
+    *, actor_id: str, channel_id: str, message_id: str, text: str, edited_at: str
+) -> Event:
+    """Channel-addressed, so it reaches who the message reached."""
+    return Event(
+        event_type=EventType.MESSAGE_UPDATE,
+        sender_id=str(actor_id),
+        receiver_id=str(channel_id),
+        text=text,
+        metadata={
+            "action": EventAction.MESSAGE_EDITED.value,
+            "message_id": str(message_id),
+            "edited_at": edited_at,
+        },
+    )
+
+
+def message_deleted(*, actor_id: str, channel_id: str, message_id: str) -> Event:
+    return Event(
+        event_type=EventType.MESSAGE_UPDATE,
+        sender_id=str(actor_id),
+        receiver_id=str(channel_id),
+        text="",
+        metadata={
+            "action": EventAction.MESSAGE_DELETED.value,
+            "message_id": str(message_id),
+        },
+    )
+
+
 def voice_state_changed(
     *, actor_id: str, actor_username: str, channel_id: str, joined: bool
 ) -> Event:

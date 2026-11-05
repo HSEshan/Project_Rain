@@ -1,6 +1,6 @@
 import axios, { type InternalAxiosRequestConfig } from "axios";
 import { emitSessionExpired } from "../shared/session";
-import { refreshSession } from "../auth/refresh";
+import { refreshSession, sessionIsOver } from "../auth/refresh";
 import { readToken } from "../auth/tokenStore";
 
 const apiUrl = "/api";
@@ -81,7 +81,7 @@ apiClient.interceptors.response.use(
         config.headers.Authorization = `Bearer ${token}`;
         return apiClient(config);
       }
-      emitSessionExpired();
+      if (sessionIsOver()) emitSessionExpired();
     } else if (status === 401 && !isAuthRoute) {
       emitSessionExpired();
     }

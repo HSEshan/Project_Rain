@@ -1,13 +1,30 @@
 from collections import defaultdict
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from libs.db import Channel, ChannelMember, ChannelType, User
+from libs.db import Channel, ChannelMember, ChannelType, Message, User
 from src.channel.schemas import DMChannelCreate
 from src.utils.exceptions import NotFoundException
 
 
 class ChannelRepository:
+
+    @staticmethod
+    async def delete_channels(db: AsyncSession, channel_ids: list[str]) -> None:
+        """Drop channels and everything that points at them.
+
+        Order matters: `messages` and `channel_members` both have a foreign key
+        to `channels` with no cascade, so they go first. Attachments need
+        nothing here: their foreign key sets null, and the media sweep collects
+        them like any other unclaimed upload.
+        """
+        if not channel_ids:
+            return
+        await db.execute(delete(Message).where(Message.channel_id.in_(channel_ids)))
+        await db.execute(
+            delete(ChannelMember).where(ChannelMember.channel_id.in_(channel_ids))
+        )
+        await db.execute(delete(Channel).where(Channel.id.in_(channel_ids)))
 
     @staticmethod
     async def create_dm_channel(
@@ -124,9 +141,19 @@ class ChannelRepository:
     async def get_channel_participants(
         db: AsyncSession, current_user_id: str, channel_ids: list[str]
     ) -> dict[str, list[str]]:
+        """Who else is in these channels, for the ones the caller is in.
+
+        A channel the caller is not in is left out rather than refused: this is a
+        bulk read, and "who is in that DM" is not theirs to learn. It used to
+        answer for any channel id at all.
+        """
+        own_channels = select(ChannelMember.channel_id).where(
+            ChannelMember.user_id == current_user_id
+        )
         channel_members = await db.execute(
             select(ChannelMember).where(
                 ChannelMember.channel_id.in_(channel_ids),
+                ChannelMember.channel_id.in_(own_channels),
                 ChannelMember.user_id != current_user_id,
             )
         )

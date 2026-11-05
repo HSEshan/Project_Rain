@@ -525,6 +525,53 @@ async def main() -> int:
         status = e.code
     report("webhook whose body does not match its signature is rejected", status == 401, str(status))
 
+    # Losing the right to be in a room. These signalling sockets stand in for a
+    # client that ignores the rules: nothing here ever leaves of its own accord,
+    # so the socket closing can only be the server's doing.
+    async def closed_by_server(signal) -> bool:
+        try:
+            async with asyncio.timeout(10):
+                while True:
+                    await signal.recv()
+        except websockets.ConnectionClosed:
+            return True
+        except TimeoutError:
+            return False
+
+    status, removal_guild = call(
+        "POST", "/guilds/", {"name": "Removal", "description": ""}, token=alice["token"]
+    )
+    removal_id = removal_guild["id"]
+    status, invite = call(
+        "POST", f"/guilds/{removal_id}/invite", {"user_id": bob["id"]}, token=alice["token"]
+    )
+    call(
+        "POST",
+        f"/guilds/{removal_id}/invites/{invite['invite_id']}/accept",
+        token=bob["token"],
+    )
+    status, channels = call("GET", "/channels/me", token=bob["token"])
+    room = [
+        c
+        for c in channels
+        if c.get("guild_id") == removal_id and c["type"] == "guild_voice"
+    ][0]["id"]
+
+    status, session = call("POST", f"/channels/{room}/voice/join", token=bob["token"])
+    async with websockets.connect(signal_url(session["token"])) as signal:
+        # The first frame is the join response: they are in the room from here.
+        # Not the roster, which only moves for a fully active participant, and
+        # this socket never gets that far.
+        await asyncio.wait_for(signal.recv(), timeout=10)
+        call("DELETE", f"/guilds/{removal_id}/members/{bob['id']}", token=alice["token"])
+        report("a removed member is put out of the room", await closed_by_server(signal))
+
+    status, session = call("POST", f"/channels/{room}/voice/join", token=alice["token"])
+    async with websockets.connect(signal_url(session["token"])) as signal:
+        await asyncio.wait_for(signal.recv(), timeout=10)
+        call("DELETE", f"/channels/{room}", token=alice["token"])
+        report("deleting a channel ends its room", await closed_by_server(signal))
+
     return 1 if FAILURES else 0
 
 

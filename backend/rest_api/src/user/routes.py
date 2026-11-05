@@ -1,5 +1,12 @@
 from fastapi import APIRouter, Depends, UploadFile
 from src.auth.utils import user_dependency
+from src.core.rate_limit import (
+    PROFILE_USER,
+    UPLOAD_IP,
+    UPLOAD_USER,
+    limit_ip,
+    limit_user,
+)
 from src.user.schemas import (
     BulkUserRequest,
     BulkUserResponse,
@@ -36,7 +43,11 @@ async def get_users_by_ids(
 # resolves in declaration order and `me` is a valid uuid-shaped path segment as
 # far as the router is concerned; the two do not collide today because the
 # methods differ, and they will the moment either grows a sibling.
-@router.patch("/me", response_model=UserProfile)
+@router.patch(
+    "/me",
+    response_model=UserProfile,
+    dependencies=[Depends(limit_user(PROFILE_USER))],
+)
 async def update_me(
     update: UserUpdate,
     current_user: user_dependency,
@@ -51,7 +62,11 @@ async def update_me(
     return await user_service.update_me(current_user.id, update)
 
 
-@router.put("/me/avatar", response_model=UserProfile)
+@router.put(
+    "/me/avatar",
+    response_model=UserProfile,
+    dependencies=[Depends(limit_ip(UPLOAD_IP)), Depends(limit_user(UPLOAD_USER))],
+)
 async def set_my_avatar(
     file: UploadFile,
     current_user: user_dependency,

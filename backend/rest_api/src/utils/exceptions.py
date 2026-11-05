@@ -36,6 +36,22 @@ class ForbiddenException(HTTPException):
         super().__init__(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
+class RateLimitedException(HTTPException):
+    """Too many requests. `Retry-After` is for a client, `detail` for a person."""
+
+    def __init__(self, retry_after: int):
+        if retry_after < 60:
+            wait = f"{retry_after} second{'' if retry_after == 1 else 's'}"
+        else:
+            minutes = -(-retry_after // 60)
+            wait = f"{minutes} minute{'' if minutes == 1 else 's'}"
+        super().__init__(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Too many attempts. Try again in {wait}",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+
 class ServiceUnavailableException(HTTPException):
     """A dependency this endpoint needs is not configured or not reachable."""
 

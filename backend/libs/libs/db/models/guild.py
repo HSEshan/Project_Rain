@@ -6,7 +6,7 @@ from libs.db.base import Base, generate_id, generate_timestamp
 from libs.media import media_url
 from sqlalchemy import UUID, DateTime
 from sqlalchemy import Enum as SQLAlchemyEnum
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -87,4 +87,56 @@ class GuildInvite(Base):
     expires_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         default=lambda: generate_timestamp(timedelta(days=7)),
+    )
+
+
+class GuildInviteLink(Base):
+    """A shareable URL with no named recipient, unlike `GuildInvite`.
+
+    `max_uses` and `expires_at` are both optional: a link with neither is the
+    standing front door of a public guild.
+    """
+
+    __tablename__ = "guild_invite_links"
+
+    code: Mapped[str] = mapped_column(String, primary_key=True)
+    guild_id: Mapped[str] = mapped_column(
+        UUID, ForeignKey("guilds.id", ondelete="CASCADE"), index=True
+    )
+    # Nullable for the reason `GuildInvite.inviter_id` is: a link outlives its
+    # creator's account.
+    creator_id: Mapped[Optional[str]] = mapped_column(
+        UUID, ForeignKey("users.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    max_uses: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    uses: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=generate_timestamp
+    )
+
+
+class GuildBan(Base):
+    """Someone who may not come back.
+
+    A table rather than `GuildMemberStatus.BANNED` on the member row, which would
+    leave a banned user in `guild_members` and make every query of that table one
+    forgotten filter away from treating them as a member.
+    """
+
+    __tablename__ = "guild_bans"
+
+    guild_id: Mapped[str] = mapped_column(
+        UUID, ForeignKey("guilds.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        UUID, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True, index=True
+    )
+    banned_by: Mapped[Optional[str]] = mapped_column(
+        UUID, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=generate_timestamp
     )

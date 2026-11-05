@@ -36,8 +36,17 @@ class EventDispatcher:
 
         # Persist all events
         async with self.session_factory() as session:
+            # Replaced rather than filtered in place, so that the publish below
+            # reads the same list that was persisted and an event refused here
+            # cannot go out on the stream.
+            if batch.get(EventType.MESSAGE):
+                batch[EventType.MESSAGE] = (
+                    await self.message_event_dispatcher.authorized(
+                        session, batch[EventType.MESSAGE]
+                    )
+                )
             persist_tasks = [
-                self._persist_group(session, event_type, group)
+                self._persist_group(session, batch, event_type, group)
                 for event_type, group in batch.items()
             ]
             results = await asyncio.gather(*persist_tasks, return_exceptions=True)
@@ -80,7 +89,11 @@ class EventDispatcher:
             logger.exception("Failed to publish batch to Redis", events=len(all_events))
 
     async def _persist_group(
-        self, session: AsyncSession, event_type: str, events: List[Event]
+        self,
+        session: AsyncSession,
+        batch: dict[str, list[Event]],
+        event_type: str,
+        events: List[Event],
     ):
         """Persist events of one type.
 
@@ -90,7 +103,10 @@ class EventDispatcher:
         failed insert was followed by a commit and a publish.
         """
         if event_type == EventType.MESSAGE:
-            await self.message_event_dispatcher.dispatch_events(session, events)
+            # Only what was stored goes on to be published
+            batch[event_type] = await self.message_event_dispatcher.dispatch_events(
+                session, events
+            )
 
     @bind_event_context(event_arg_name="event")
     async def send_events_to_clients(self, events: List[Event]):

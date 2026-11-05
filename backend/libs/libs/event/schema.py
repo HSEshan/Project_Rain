@@ -24,6 +24,10 @@ class EventType(str, Enum):
     # message. The audio itself never touches this pipeline — that is the SFU's
     # job (see AGENTS.md, "Voice / SFU").
     VOICE_STATE = "voice_state"
+    # A message already in the channel was edited or deleted. Its own type rather
+    # than `message`, which every consumer takes to mean "append this". Published
+    # by rest_api only: a client frame can only ever become a `message`.
+    MESSAGE_UPDATE = "message_update"
 
     @classmethod
     def is_user_addressed(cls, event_type: "EventType | str") -> bool:
@@ -98,6 +102,15 @@ class EventAction(str, Enum):
     # client's channel list needs rebuilding. Only that channel's name and
     # member list are stale.
     GROUP_DM_UPDATED = "group_dm_updated"
+    # A guild this user is in changed name, roster or roles. Also not a
+    # membership change for the recipient, for the same reason as above: what
+    # is stale is the guild row and its member list.
+    GUILD_UPDATED = "guild_updated"
+    # This socket is sending too fast. Written straight to it by the gateway and
+    # never published, so it does not reach the stream or any other connection.
+    RATE_LIMITED = "rate_limited"
+    MESSAGE_EDITED = "message_edited"
+    MESSAGE_DELETED = "message_deleted"
     VOICE_JOINED = "voice_joined"
     VOICE_LEFT = "voice_left"
 

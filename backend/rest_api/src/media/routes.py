@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, UploadFile, status
 from src.auth.utils import user_dependency
+from src.core.rate_limit import UPLOAD_IP, UPLOAD_USER, limit_ip, limit_user
 from src.media.schemas import AttachmentResponse
 from src.media.service import MediaService, get_media_service
 
@@ -10,6 +11,7 @@ router = APIRouter(prefix="/uploads", tags=["uploads"])
     "/attachments",
     response_model=AttachmentResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_ip(UPLOAD_IP)), Depends(limit_user(UPLOAD_USER))],
 )
 async def upload_attachment(
     file: UploadFile,

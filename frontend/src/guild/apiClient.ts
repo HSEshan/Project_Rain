@@ -1,7 +1,7 @@
 import type { AxiosResponse } from "axios";
 import apiClient from "../utils/apiClientBase";
 import type { ChannelType } from "../shared/types";
-import { type Guild, type GuildMember } from "./types";
+import { type Guild, type GuildMember, type GuildMemberRole } from "./types";
 
 export const getUserGuilds = async (): Promise<Guild[]> => {
   const response = await apiClient.get("/guilds/me");
@@ -13,6 +13,135 @@ export const getGuildMembers = async (
 ): Promise<GuildMember[]> => {
   const response = await apiClient.get(`/guilds/${guildId}/members`);
   return response.data;
+};
+
+export const patchGuild = async (
+  guildId: string,
+  update: { name?: string; description?: string }
+): Promise<Guild> => {
+  const response = await apiClient.patch(`/guilds/${guildId}`, update);
+  return response.data;
+};
+
+export const deleteGuild = async (guildId: string): Promise<void> => {
+  await apiClient.delete(`/guilds/${guildId}`);
+};
+
+export const patchGuildMemberRole = async (
+  guildId: string,
+  userId: string,
+  role: GuildMemberRole
+): Promise<GuildMember> => {
+  const response = await apiClient.patch(
+    `/guilds/${guildId}/members/${userId}`,
+    { role }
+  );
+  return response.data;
+};
+
+export const deleteGuildMember = async (
+  guildId: string,
+  userId: string
+): Promise<void> => {
+  await apiClient.delete(`/guilds/${guildId}/members/${userId}`);
+};
+
+export type GuildBan = { user_id: string; username: string; created_at: string };
+
+export const postGuildBan = async (
+  guildId: string,
+  userId: string
+): Promise<void> => {
+  await apiClient.post(`/guilds/${guildId}/bans/${userId}`);
+};
+
+export const getGuildBans = async (guildId: string): Promise<GuildBan[]> => {
+  const response = await apiClient.get(`/guilds/${guildId}/bans`);
+  return response.data;
+};
+
+export const deleteGuildBan = async (
+  guildId: string,
+  userId: string
+): Promise<void> => {
+  await apiClient.delete(`/guilds/${guildId}/bans/${userId}`);
+};
+
+export const deleteLeaveGuild = async (guildId: string): Promise<void> => {
+  await apiClient.delete(`/guilds/${guildId}/members/me`);
+};
+
+export const postTransferGuild = async (
+  guildId: string,
+  userId: string
+): Promise<Guild> => {
+  const response = await apiClient.post(`/guilds/${guildId}/transfer`, {
+    user_id: userId,
+  });
+  return response.data;
+};
+
+export type InviteLink = {
+  code: string;
+  guild_id: string;
+  /** Null once the account that made it is gone. */
+  creator_id: string | null;
+  max_uses: number | null;
+  uses: number;
+  expires_at: string | null;
+  created_at: string;
+};
+
+export type InviteLinkPreview = {
+  guild_name: string;
+  guild_description: string;
+  icon_url: string | null;
+  member_count: number;
+};
+
+export const getInviteLinks = async (
+  guildId: string
+): Promise<InviteLink[]> => {
+  const response = await apiClient.get(`/guilds/${guildId}/invite-links`);
+  return response.data;
+};
+
+export const postInviteLink = async (
+  guildId: string,
+  options: { expires_in_hours: number | null; max_uses: number | null }
+): Promise<InviteLink> => {
+  const response = await apiClient.post(
+    `/guilds/${guildId}/invite-links`,
+    options
+  );
+  return response.data;
+};
+
+export const deleteInviteLink = async (
+  guildId: string,
+  code: string
+): Promise<void> => {
+  await apiClient.delete(`/guilds/${guildId}/invite-links/${code}`);
+};
+
+export const getInviteLinkPreview = async (
+  code: string
+): Promise<InviteLinkPreview> => {
+  const response = await apiClient.get(`/invites/${encodeURIComponent(code)}`);
+  return response.data;
+};
+
+export const postAcceptInviteLink = async (
+  code: string
+): Promise<{ guild_id: string; already_member: boolean }> => {
+  const response = await apiClient.post(
+    `/invites/${encodeURIComponent(code)}/accept`
+  );
+  return response.data;
+};
+
+export const deleteGuildChannel = async (channelId: string): Promise<void> => {
+  await apiClient.delete(`/channels/${channelId}`);
 };
 
 export type GuildChannelCreate = {

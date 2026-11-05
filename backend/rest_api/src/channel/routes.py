@@ -106,6 +106,16 @@ async def update_group_dm(
     return await channel_service.update_group_dm(user, channel_id, update)
 
 
+@router.delete("/{channel_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_guild_channel(
+    channel_id: str,
+    user: user_dependency,
+    channel_service: ChannelService = Depends(get_channel_service),
+):
+    """Delete a guild channel and its messages. Admins and the owner."""
+    await channel_service.delete_guild_channel(user, channel_id)
+
+
 @router.post(
     "/{channel_id}/members",
     response_model=ChannelMembers,

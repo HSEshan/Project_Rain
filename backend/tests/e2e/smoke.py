@@ -567,7 +567,7 @@ status, _ = call(
     {"name": "sneaky", "type": "guild_text"},
     token=carol["token"],
 )
-check("non-admin cannot create guild channel", status == 403, f"got {status}")
+check("non-member cannot create guild channel", status == 404, f"got {status}")
 
 print("== guild invite ==")
 status, invite = call(
@@ -1148,6 +1148,736 @@ run_probe(
     "multi socket probe",
 )
 
+print("== guild roles ==")
+# Fresh users and a fresh guild: this section kicks, demotes and deletes.
+owner = register("gr_owner")
+admin = register("gr_admin")
+admin2 = register("gr_admin2")
+mod = register("gr_mod")
+member = register("gr_member")
+outsider = register("gr_out")
+
+status, roles_guild = call(
+    "POST", "/guilds/", {"name": "Roles", "description": "roles"}, token=owner["token"]
+)
+rg = roles_guild["id"]
+
+
+def join(person, guild_id=None, inviter=None):
+    guild_id = guild_id or rg
+    _, invite = call(
+        "POST",
+        f"/guilds/{guild_id}/invite",
+        {"user_id": person["id"]},
+        token=(inviter or owner)["token"],
+    )
+    call(
+        "POST",
+        f"/guilds/{guild_id}/invites/{invite['invite_id']}/accept",
+        token=person["token"],
+    )
+
+
+def set_role(actor, target, role, guild_id=None):
+    return call(
+        "PATCH",
+        f"/guilds/{guild_id or rg}/members/{target['id']}",
+        {"role": role},
+        token=actor["token"],
+    )
+
+
+def roster(guild_id=None):
+    _, rows = call("GET", f"/guilds/{guild_id or rg}/members", token=owner["token"])
+    return {row["user_id"]: row["role"] for row in rows or []}
+
+
+for person in (admin, admin2, mod, member):
+    join(person)
+
+status, body = set_role(member, mod, "moderator")
+check("a member cannot change roles (403)", status == 403, f"{status} {body}")
+status, body = set_role(outsider, mod, "moderator")
+check("a non-member cannot change roles (404)", status == 404, f"{status} {body}")
+
+status, body = set_role(owner, admin, "admin")
+check(
+    "the owner can make an admin",
+    status == 200 and (body or {}).get("role") == "admin",
+    f"{status} {body}",
+)
+status, body = set_role(admin, mod, "moderator")
+check(
+    "an admin can make a moderator",
+    status == 200 and (body or {}).get("role") == "moderator",
+    f"{status} {body}",
+)
+status, body = set_role(admin, admin2, "admin")
+check("an admin can make another admin", status == 200, f"{status} {body}")
+
+status, body = set_role(mod, member, "moderator")
+check("a moderator cannot change roles (403)", status == 403, f"{status} {body}")
+status, body = set_role(admin, admin, "member")
+check("nobody can change their own role (403)", status == 403, f"{status} {body}")
+status, body = set_role(member, member, "admin")
+check("a member cannot promote themselves (403)", status == 403, f"{status} {body}")
+status, body = set_role(admin, admin2, "member")
+check("an admin cannot demote an equal (403)", status == 403, f"{status} {body}")
+status, body = set_role(admin, owner, "member")
+check("an admin cannot demote the owner (403)", status == 403, f"{status} {body}")
+status, body = set_role(owner, owner, "member")
+check("the owner cannot demote themselves (403)", status == 403, f"{status} {body}")
+status, body = set_role(owner, outsider, "member")
+check("a role for a non-member is a 404", status == 404, f"{status} {body}")
+status, body = set_role(owner, member, "superuser")
+check("an unknown role is a 422", status == 422, f"{status} {body}")
+
+rows = roster()
+check(
+    "refused role changes changed nothing",
+    rows.get(owner["id"]) == "admin"
+    and rows.get(admin["id"]) == "admin"
+    and rows.get(admin2["id"]) == "admin"
+    and rows.get(mod["id"]) == "moderator"
+    and rows.get(member["id"]) == "member",
+    str(rows),
+)
+status, rows = call("GET", f"/guilds/{rg}/members", token=member["token"])
+check(
+    "the member list is allowlisted",
+    status == 200 and set((rows or [{}])[0]) == {"guild_id", "user_id", "status", "role"},
+    str((rows or [{}])[0]),
+)
+
+print("== guild update ==")
+status, body = call("PATCH", f"/guilds/{rg}", {"name": "Nope"}, token=member["token"])
+check("a member cannot rename the guild (403)", status == 403, f"{status} {body}")
+status, body = call("PATCH", f"/guilds/{rg}", {"name": "Nope"}, token=mod["token"])
+check("a moderator cannot rename the guild (403)", status == 403, f"{status} {body}")
+status, body = call("PATCH", f"/guilds/{rg}", {"name": "Nope"}, token=outsider["token"])
+check("a non-member cannot rename the guild (404)", status == 404, f"{status} {body}")
+
+status, body = call(
+    "PATCH", f"/guilds/{rg}", {"name": "  Renamed  "}, token=admin["token"]
+)
+check(
+    "an admin can rename, and the name is trimmed",
+    status == 200 and (body or {}).get("name") == "Renamed",
+    f"{status} {body}",
+)
+check(
+    "a rename leaves the description alone",
+    (body or {}).get("description") == "roles",
+    str(body),
+)
+status, body = call(
+    "PATCH", f"/guilds/{rg}", {"description": "changed"}, token=owner["token"]
+)
+check(
+    "a description edit leaves the name alone",
+    status == 200
+    and (body or {}).get("name") == "Renamed"
+    and (body or {}).get("description") == "changed",
+    f"{status} {body}",
+)
+status, body = call("PATCH", f"/guilds/{rg}", {"name": "   "}, token=owner["token"])
+check("a blank name is a 422", status == 422, f"{status} {body}")
+status, body = call("PATCH", f"/guilds/{rg}", {"name": None}, token=owner["token"])
+check("a null name is a 422", status == 422, f"{status} {body}")
+status, body = call("PATCH", f"/guilds/{rg}", {"name": "x" * 101}, token=owner["token"])
+check("an over-long name is a 422", status == 422, f"{status} {body}")
+status, body = call(
+    "PATCH", f"/guilds/{rg}", {"description": "x" * 301}, token=owner["token"]
+)
+check("an over-long description is a 422", status == 422, f"{status} {body}")
+status, body = call("POST", "/guilds/", {"name": " ", "description": ""}, token=owner["token"])
+check("a guild cannot be created with a blank name", status == 422, f"{status} {body}")
+
+print("== guild channel delete ==")
+status, doomed = call(
+    "POST",
+    f"/channels/guild/{rg}",
+    {"name": "doomed", "type": "guild_text"},
+    token=admin["token"],
+)
+check("an admin can create a channel", status == 201, str(doomed))
+status, body = call(
+    "POST",
+    f"/channels/guild/{rg}",
+    {"name": "nope", "type": "guild_text"},
+    token=mod["token"],
+)
+check("a moderator cannot create a channel (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/channels/{doomed['id']}", token=member["token"])
+check("a member cannot delete a channel (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/channels/{doomed['id']}", token=mod["token"])
+check("a moderator cannot delete a channel (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/channels/{doomed['id']}", token=outsider["token"])
+check("a non-member cannot delete a channel (404)", status == 404, f"{status} {body}")
+check(
+    "a channel with a message in it can be deleted",
+    psql(
+        "INSERT INTO messages (id, sender_id, channel_id, content, created_at) VALUES "
+        f"(gen_random_uuid(), '{owner['id']}', '{doomed['id']}', 'bye', now())"
+    ),
+)
+status, body = call("DELETE", f"/channels/{doomed['id']}", token=admin["token"])
+check("an admin can delete a channel", status == 204, f"{status} {body}")
+status, body = call("DELETE", f"/channels/{doomed['id']}", token=admin["token"])
+check("deleting it twice is a 404", status == 404, f"{status} {body}")
+_, member_channels = call("GET", "/channels/me", token=member["token"])
+check(
+    "a deleted channel leaves its members' lists",
+    doomed["id"] not in [c["id"] for c in member_channels or []],
+    str(member_channels),
+)
+status, body = call("DELETE", f"/channels/{dm_channel_id}", token=alice["token"])
+check("a DM cannot be deleted (403)", status == 403, f"{status} {body}")
+
+print("== who is in a channel you are not in ==")
+status, seen = call(
+    "POST", "/channels/bulk/participants", [dm_channel_id], token=outsider["token"]
+)
+check("a stranger cannot read a DM's participants", status == 200 and seen == {}, f"{status} {seen}")
+status, seen = call("POST", "/channels/bulk/participants", [dm_channel_id], token=alice["token"])
+check("a member still can", status == 200 and bool((seen or {}).get(dm_channel_id)), f"{status} {seen}")
+
+print("== kick by rank ==")
+victim = register("gr_victim")
+join(victim)
+status, body = call("DELETE", f"/guilds/{rg}/members/{victim['id']}", token=member["token"])
+check("a member cannot remove anyone (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{rg}/members/{admin['id']}", token=mod["token"])
+check("a moderator cannot remove an admin (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{rg}/members/{owner['id']}", token=admin["token"])
+check("an admin cannot remove the owner (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{rg}/members/{admin2['id']}", token=admin["token"])
+check("an admin cannot remove an equal (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{rg}/members/{owner['id']}", token=owner["token"])
+check("the owner cannot remove themselves (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{rg}/members/{victim['id']}", token=mod["token"])
+check("a moderator can remove a member", status == 204, f"{status} {body}")
+check("the removed member is gone", victim["id"] not in roster(), str(roster()))
+status, body = call("DELETE", f"/guilds/{rg}/members/{outsider['id']}", token=owner["token"])
+check("removing a non-member is a 404", status == 404, f"{status} {body}")
+
+print("== guild delete ==")
+status, body = call("DELETE", f"/guilds/{rg}", token=admin["token"])
+check("an admin cannot delete the guild (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{rg}", token=outsider["token"])
+check("a non-member cannot delete the guild (404)", status == 404, f"{status} {body}")
+
+_, rg_channels = call("GET", "/channels/me", token=member["token"])
+rg_channel_ids = [c["id"] for c in rg_channels or [] if c.get("guild_id") == rg]
+check("the guild still has channels to delete", len(rg_channel_ids) == 2, str(rg_channel_ids))
+check(
+    "a guild with a message in it can be deleted",
+    psql(
+        "INSERT INTO messages (id, sender_id, channel_id, content, created_at) VALUES "
+        f"(gen_random_uuid(), '{owner['id']}', '{rg_channel_ids[0]}', 'bye', now())"
+    ),
+)
+call(
+    "POST",
+    f"/guilds/{rg}/invite",
+    {"user_id": outsider["id"]},
+    token=owner["token"],
+    expect=201,
+)
+status, body = call("DELETE", f"/guilds/{rg}", token=owner["token"])
+check("the owner can delete the guild", status == 204, f"{status} {body}")
+status, body = call("GET", f"/guilds/{rg}", token=owner["token"])
+check("the deleted guild is gone", status == 404, f"{status} {body}")
+_, member_channels = call("GET", "/channels/me", token=member["token"])
+check(
+    "its channels leave every member's list",
+    not [c for c in member_channels or [] if c.get("guild_id") == rg],
+    str(member_channels),
+)
+_, member_guilds = call("GET", "/guilds/me", token=member["token"])
+check("it leaves every member's guild list", member_guilds == [], str(member_guilds))
+_, pending = call("GET", "/guilds/invites/me", token=outsider["token"])
+check("a pending invite goes with it", pending == [], str(pending))
+
+print("== message edit and delete ==")
+me_owner, me_admin, me_mod, me_mod2, me_member, me_out = (
+    register("me_owner"), register("me_admin"), register("me_mod"),
+    register("me_mod2"), register("me_member"), register("me_out"),
+)
+_, me_guild = call(
+    "POST", "/guilds/", {"name": "Edits", "description": ""}, token=me_owner["token"]
+)
+mg = me_guild["id"]
+for person in (me_admin, me_mod, me_mod2, me_member):
+    join(person, mg, me_owner)
+set_role(me_owner, me_admin, "admin", mg)
+set_role(me_owner, me_mod, "moderator", mg)
+set_role(me_owner, me_mod2, "moderator", mg)
+_, me_channels = call("GET", "/channels/me", token=me_owner["token"])
+mc = [c for c in me_channels if c.get("guild_id") == mg and c["type"] == "guild_text"][0]["id"]
+
+
+def seed_message(author, text="hello", channel=None):
+    message_id = str(uuid.uuid4())
+    psql(
+        "INSERT INTO messages (id, sender_id, channel_id, content, created_at) VALUES "
+        f"('{message_id}', '{author['id']}', '{channel or mc}', '{text}', now())"
+    )
+    return message_id
+
+
+def in_history(message_id, reader, channel=None):
+    _, rows = call("GET", f"/messages/{channel or mc}", token=reader["token"])
+    return next((m for m in rows or [] if m["id"] == message_id), None)
+
+
+mine = seed_message(me_member)
+status, body = call("PATCH", f"/messages/{mine}", {"content": "edited"}, token=me_member["token"])
+check(
+    "an author can edit their message",
+    status == 200 and (body or {}).get("content") == "edited" and (body or {}).get("edited_at"),
+    f"{status} {body}",
+)
+row = in_history(mine, me_owner)
+check(
+    "the edit is in history, marked",
+    (row or {}).get("content") == "edited" and (row or {}).get("edited_at"),
+    str(row),
+)
+status, body = call("PATCH", f"/messages/{mine}", {"content": "x"}, token=me_owner["token"])
+check("not even the owner can edit someone else's words (403)", status == 403, f"{status} {body}")
+status, body = call("PATCH", f"/messages/{mine}", {"content": "x"}, token=me_out["token"])
+check("a non-member cannot edit (404)", status == 404, f"{status} {body}")
+status, body = call("DELETE", f"/messages/{mine}", token=me_out["token"])
+check("a non-member cannot delete (404)", status == 404, f"{status} {body}")
+status, body = call("PATCH", f"/messages/{mine}", {"content": "   "}, token=me_member["token"])
+check("a text message cannot be edited empty (400)", status == 400, f"{status} {body}")
+status, body = call("PATCH", f"/messages/{mine}", {"content": "x" * 4001}, token=me_member["token"])
+check("an over-long edit is a 422", status == 422, f"{status} {body}")
+status, body = call("PATCH", "/messages/00000000-0000-0000-0000-000000000000", {"content": "x"}, token=me_member["token"])
+check("an unknown message is a 404", status == 404, f"{status} {body}")
+
+status, body = call("DELETE", f"/messages/{mine}", token=me_member["token"])
+check("an author can delete their message", status == 204, f"{status} {body}")
+check("and it is gone", in_history(mine, me_owner) is None)
+
+theirs = seed_message(me_member)
+other_member = register("me_other")
+join(other_member, mg, me_owner)
+status, body = call("DELETE", f"/messages/{theirs}", token=other_member["token"])
+check("a member cannot delete another's message (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/messages/{theirs}", token=me_mod["token"])
+check("a moderator can delete a member's message", status == 204, f"{status} {body}")
+
+peer = seed_message(me_mod2)
+status, body = call("DELETE", f"/messages/{peer}", token=me_mod["token"])
+check("a moderator cannot delete a peer's (403)", status == 403, f"{status} {body}")
+above = seed_message(me_admin)
+status, body = call("DELETE", f"/messages/{above}", token=me_mod["token"])
+check("a moderator cannot delete an admin's (403)", status == 403, f"{status} {body}")
+owners = seed_message(me_owner)
+status, body = call("DELETE", f"/messages/{owners}", token=me_admin["token"])
+check("an admin cannot delete the owner's (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/messages/{above}", token=me_owner["token"])
+check("the owner can delete an admin's", status == 204, f"{status} {body}")
+
+gone_author = seed_message(other_member)
+call("DELETE", f"/guilds/{mg}/members/me", token=other_member["token"])
+status, body = call("DELETE", f"/messages/{gone_author}", token=me_mod["token"])
+check("a moderator can tidy up after someone who left", status == 204, f"{status} {body}")
+
+dm_message = seed_message(alice, channel=dm_channel_id)
+status, body = call("DELETE", f"/messages/{dm_message}", token=bob["token"])
+check("in a DM, the other person cannot delete it (403)", status == 403, f"{status} {body}")
+status, body = call("PATCH", f"/messages/{dm_message}", {"content": "x"}, token=bob["token"])
+check("or edit it (403)", status == 403, f"{status} {body}")
+
+print("== leave and transfer ==")
+lt_owner, lt_heir, lt_member, lt_out = (
+    register("lt_owner"), register("lt_heir"), register("lt_member"), register("lt_out"),
+)
+_, lt_guild = call(
+    "POST", "/guilds/", {"name": "Heirloom", "description": ""}, token=lt_owner["token"]
+)
+lg = lt_guild["id"]
+join(lt_heir, lg, lt_owner)
+join(lt_member, lg, lt_owner)
+
+status, body = call("DELETE", f"/guilds/{lg}/members/me", token=lt_out["token"])
+check("a non-member cannot leave (404)", status == 404, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{lg}/members/me", token=lt_owner["token"])
+check("the owner cannot leave (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{lg}/members/me", token=lt_member["token"])
+check("a member can leave", status == 204, f"{status} {body}")
+_, left_channels = call("GET", "/channels/me", token=lt_member["token"])
+check(
+    "leaving leaves the channels",
+    not [c for c in left_channels or [] if c.get("guild_id") == lg],
+    str(left_channels),
+)
+join(lt_member, lg, lt_owner)
+
+status, body = call(
+    "POST", f"/guilds/{lg}/transfer", {"user_id": lt_member["id"]}, token=lt_heir["token"]
+)
+check("a member cannot transfer (403)", status == 403, f"{status} {body}")
+call("PATCH", f"/guilds/{lg}/members/{lt_heir['id']}", {"role": "admin"}, token=lt_owner["token"])
+status, body = call(
+    "POST", f"/guilds/{lg}/transfer", {"user_id": lt_heir["id"]}, token=lt_heir["token"]
+)
+check("an admin cannot take the guild (403)", status == 403, f"{status} {body}")
+status, body = call(
+    "POST", f"/guilds/{lg}/transfer", {"user_id": lt_out["id"]}, token=lt_owner["token"]
+)
+check("it cannot go to a non-member (404)", status == 404, f"{status} {body}")
+status, body = call(
+    "POST", f"/guilds/{lg}/transfer", {"user_id": lt_owner["id"]}, token=lt_owner["token"]
+)
+check("it cannot go to its owner (400)", status == 400, f"{status} {body}")
+status, body = call(
+    "POST", f"/guilds/{lg}/transfer", {"user_id": lt_member["id"]}, token=lt_owner["token"]
+)
+check(
+    "the owner can transfer, even to a plain member",
+    status == 200 and (body or {}).get("owner_id") == lt_member["id"],
+    f"{status} {body}",
+)
+_, lg_rows = call("GET", f"/guilds/{lg}/members", token=lt_member["token"])
+lg_roles = {row["user_id"]: row["role"] for row in lg_rows or []}
+check(
+    "the new owner holds the admin row, the old one keeps theirs",
+    lg_roles.get(lt_member["id"]) == "admin" and lg_roles.get(lt_owner["id"]) == "admin",
+    str(lg_roles),
+)
+status, body = call("DELETE", f"/guilds/{lg}", token=lt_owner["token"])
+check("the old owner can no longer delete it (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{lg}/members/{lt_owner['id']}", token=lt_member["token"])
+check("the new owner outranks the old one", status == 204, f"{status} {body}")
+
+print("== invite links ==")
+il_owner, il_member, il_a, il_b, il_c = (
+    register("il_owner"), register("il_member"), register("il_a"), register("il_b"), register("il_c"),
+)
+_, il_guild = call(
+    "POST", "/guilds/", {"name": "Open Door", "description": "come in"}, token=il_owner["token"]
+)
+ig = il_guild["id"]
+join(il_member, ig, il_owner)
+
+status, link = call("POST", f"/guilds/{ig}/invite-links", {}, token=il_owner["token"])
+check(
+    "a link can be created",
+    status == 201 and len((link or {}).get("code", "")) >= 16,
+    f"{status} {link}",
+)
+code = (link or {}).get("code")
+check("with no expiry and no limit by default", link.get("expires_at") is None and link.get("max_uses") is None)
+status, body = call("POST", f"/guilds/{ig}/invite-links", {}, token=il_a["token"])
+check("a non-member cannot make one (404)", status == 404, f"{status} {body}")
+status, body = call("POST", f"/guilds/{ig}/invite-links", {"max_uses": 0}, token=il_owner["token"])
+check("a limit of zero is a 422", status == 422, f"{status} {body}")
+
+status, preview = call("GET", f"/invites/{code}")
+check(
+    "the preview needs no account",
+    status == 200
+    and preview == {
+        "guild_name": "Open Door",
+        "guild_description": "come in",
+        "icon_url": None,
+        "member_count": 2,
+    },
+    f"{status} {preview}",
+)
+status, body = call("GET", "/invites/not-a-real-code")
+check("an unknown code is a 404", status == 404, f"{status} {body}")
+status, body = call("POST", f"/invites/{code}/accept")
+check("accepting needs an account (401)", status == 401, f"{status} {body}")
+
+status, body = call("POST", f"/invites/{code}/accept", token=il_a["token"])
+check(
+    "anyone with the link can join",
+    status == 200 and body == {"guild_id": ig, "already_member": False},
+    f"{status} {body}",
+)
+_, il_channels = call("GET", "/channels/me", token=il_a["token"])
+check(
+    "joining by link joins the channels",
+    len([c for c in il_channels or [] if c.get("guild_id") == ig]) == 2,
+    str(il_channels),
+)
+_, il_rows = call("GET", f"/guilds/{ig}/members", token=il_owner["token"])
+check(
+    "they join as a plain member",
+    {r["user_id"]: r["role"] for r in il_rows or []}.get(il_a["id"]) == "member",
+    str(il_rows),
+)
+
+_, one_use = call("POST", f"/guilds/{ig}/invite-links", {"max_uses": 1}, token=il_owner["token"])
+status, body = call("POST", f"/invites/{one_use['code']}/accept", token=il_a["token"])
+check(
+    "someone already in the guild is sent there without spending a use",
+    status == 200 and (body or {}).get("already_member") is True,
+    f"{status} {body}",
+)
+status, body = call("POST", f"/invites/{one_use['code']}/accept", token=il_b["token"])
+check("a one-use link works once", status == 200, f"{status} {body}")
+status, body = call("POST", f"/invites/{one_use['code']}/accept", token=il_c["token"])
+check("and not twice", status == 404, f"{status} {body}")
+status, body = call("GET", f"/invites/{one_use['code']}")
+check("a used-up link has no preview", status == 404, f"{status} {body}")
+
+_, expiring = call(
+    "POST", f"/guilds/{ig}/invite-links", {"expires_in_hours": 1}, token=il_owner["token"]
+)
+check("an expiring link says when", bool(expiring.get("expires_at")), str(expiring))
+psql(f"UPDATE guild_invite_links SET expires_at = now() - interval '1 minute' WHERE code = '{expiring['code']}'")
+status, body = call("POST", f"/invites/{expiring['code']}/accept", token=il_c["token"])
+check("an expired link is refused", status == 404, f"{status} {body}")
+
+# A pending personal invite would otherwise be left to fail when accepted
+_, personal = call("POST", f"/guilds/{ig}/invite", {"user_id": il_c["id"]}, token=il_owner["token"])
+_, third = call("POST", f"/guilds/{ig}/invite-links", {}, token=il_member["token"])
+status, body = call("POST", f"/invites/{third['code']}/accept", token=il_c["token"])
+check("a plain member's link works", status == 200, f"{status} {body}")
+_, pending = call("GET", "/guilds/invites/me", token=il_c["token"])
+check("joining by link uses up a pending invite", pending == [], str(pending))
+
+_, member_links = call("GET", f"/guilds/{ig}/invite-links", token=il_member["token"])
+check(
+    "a member lists only their own links",
+    [l["code"] for l in member_links or []] == [third["code"]],
+    str(member_links),
+)
+_, owner_links = call("GET", f"/guilds/{ig}/invite-links", token=il_owner["token"])
+check(
+    "an admin lists them all, and only live ones",
+    code in [l["code"] for l in owner_links or []]
+    and third["code"] in [l["code"] for l in owner_links or []]
+    and one_use["code"] not in [l["code"] for l in owner_links or []]
+    and expiring["code"] not in [l["code"] for l in owner_links or []],
+    str(owner_links),
+)
+status, body = call("DELETE", f"/guilds/{ig}/invite-links/{code}", token=il_member["token"])
+check("a member cannot revoke someone else's link (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{ig}/invite-links/{third['code']}", token=il_member["token"])
+check("a member can revoke their own", status == 204, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{ig}/invite-links/{code}", token=il_owner["token"])
+check("an admin can revoke anyone's", status == 204, f"{status} {body}")
+status, body = call("GET", f"/invites/{code}")
+check("a revoked link stops working", status == 404, f"{status} {body}")
+
+_, parting = call("POST", f"/guilds/{ig}/invite-links", {}, token=il_a["token"])
+status, _ = call("DELETE", f"/guilds/{ig}/members/{il_a['id']}", token=il_owner["token"])
+status, body = call("POST", f"/invites/{parting['code']}/accept", token=il_a["token"])
+check("removing someone ends the links they made", status == 404, f"{status} {body}")
+
+print("== bans ==")
+bn_owner, bn_mod, bn_admin, bn_member, bn_troll = (
+    register("bn_owner"), register("bn_mod"), register("bn_admin"),
+    register("bn_member"), register("bn_troll"),
+)
+_, bn_guild = call(
+    "POST", "/guilds/", {"name": "Bans", "description": ""}, token=bn_owner["token"]
+)
+bg = bn_guild["id"]
+for person in (bn_mod, bn_admin, bn_member, bn_troll):
+    join(person, bg, bn_owner)
+set_role(bn_owner, bn_mod, "moderator", bg)
+set_role(bn_owner, bn_admin, "admin", bg)
+_, bn_link = call("POST", f"/guilds/{bg}/invite-links", {}, token=bn_owner["token"])
+
+status, body = call("POST", f"/guilds/{bg}/bans/{bn_troll['id']}", token=bn_member["token"])
+check("a member cannot ban (403)", status == 403, f"{status} {body}")
+status, body = call("POST", f"/guilds/{bg}/bans/{bn_admin['id']}", token=bn_mod["token"])
+check("a moderator cannot ban an admin (403)", status == 403, f"{status} {body}")
+status, body = call("POST", f"/guilds/{bg}/bans/{bn_owner['id']}", token=bn_admin["token"])
+check("an admin cannot ban the owner (403)", status == 403, f"{status} {body}")
+status, body = call("POST", f"/guilds/{bg}/bans/{bn_mod['id']}", token=bn_mod["token"])
+check("nobody can ban themselves (403)", status == 403, f"{status} {body}")
+status, body = call("POST", f"/guilds/{bg}/bans/{outsider['id']}", token=bn_owner["token"])
+check("banning a non-member is a 404", status == 404, f"{status} {body}")
+
+status, body = call("POST", f"/guilds/{bg}/bans/{bn_troll['id']}", token=bn_mod["token"])
+check("a moderator can ban a member", status == 204, f"{status} {body}")
+_, troll_guilds = call("GET", "/guilds/me", token=bn_troll["token"])
+check("banning removes them", troll_guilds == [], str(troll_guilds))
+
+status, body = call("POST", f"/invites/{bn_link['code']}/accept", token=bn_troll["token"])
+check("a banned user cannot use a link (403)", status == 403, f"{status} {body}")
+_, live = call("GET", f"/guilds/{bg}/invite-links", token=bn_owner["token"])
+check("and the refusal does not spend a use", live[0]["uses"] == 0, str(live))
+status, body = call(
+    "POST", f"/guilds/{bg}/invite", {"user_id": bn_troll["id"]}, token=bn_owner["token"]
+)
+check("a banned user cannot be invited (403)", status == 403, f"{status} {body}")
+
+status, body = call("GET", f"/guilds/{bg}/bans", token=bn_member["token"])
+check("a member cannot read the ban list (403)", status == 403, f"{status} {body}")
+status, bans = call("GET", f"/guilds/{bg}/bans", token=bn_mod["token"])
+check(
+    "a moderator can, with names",
+    status == 200 and [b["username"] for b in bans or []] == [bn_troll["username"]],
+    f"{status} {bans}",
+)
+status, body = call("DELETE", f"/guilds/{bg}/bans/{bn_troll['id']}", token=bn_member["token"])
+check("a member cannot lift a ban (403)", status == 403, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{bg}/bans/{bn_troll['id']}", token=bn_mod["token"])
+check("a ban can be lifted", status == 204, f"{status} {body}")
+status, body = call("DELETE", f"/guilds/{bg}/bans/{bn_troll['id']}", token=bn_mod["token"])
+check("lifting it twice is a 404", status == 404, f"{status} {body}")
+_, troll_guilds = call("GET", "/guilds/me", token=bn_troll["token"])
+check("lifting a ban does not bring them back", troll_guilds == [], str(troll_guilds))
+status, body = call("POST", f"/invites/{bn_link['code']}/accept", token=bn_troll["token"])
+check("but they can come back by invite", status == 200, f"{status} {body}")
+
+print("== the demo survives a visitor with an owner's powers ==")
+
+
+def demo_login():
+    """Past the reset cooldown, so each login really resets."""
+    subprocess.run(
+        ["docker", "compose", "exec", "-T", "redis", "redis-cli", "DEL", "demo:reset:cooldown"],
+        capture_output=True,
+    )
+    status, body, _ = session_call("/demo/login")
+    return (body or {}).get("access_token") if status == 200 else None
+
+
+demo_token = demo_login()
+if not demo_token:
+    print("  SKIP  demo reset (DEMO_ENABLED is off)")
+else:
+    def demo_guild():
+        _, guilds = call("GET", "/guilds/me", token=demo_token)
+        return guilds[0] if guilds else {}
+
+    def demo_snapshot():
+        guild = demo_guild()
+        _, rows = call("GET", f"/guilds/{guild.get('id')}/members", token=demo_token)
+        _, channels = call("GET", "/channels/me", token=demo_token)
+        return {
+            "guild": (guild.get("name"), guild.get("description")),
+            "roles": sorted(row["role"] for row in rows or []),
+            "members": len(rows or []),
+            "channels": sorted(
+                c["name"] for c in channels or [] if c.get("guild_id") == guild.get("id")
+            ),
+        }
+
+    clean = demo_snapshot()
+    guild = demo_guild()
+    _, rows = call("GET", f"/guilds/{guild['id']}/members", token=demo_token)
+    cast = [row["user_id"] for row in rows if row["role"] == "member"]
+    _, channels = call("GET", "/channels/me", token=demo_token)
+    a_channel = [c for c in channels if c.get("guild_id") == guild["id"]][0]
+
+    status, _ = call(
+        "PATCH",
+        f"/guilds/{guild['id']}/members/{cast[0]}",
+        {"role": "admin"},
+        token=demo_token,
+    )
+    check("a demo visitor can promote the cast", status == 200, f"got {status}")
+    status, _ = call("DELETE", f"/guilds/{guild['id']}/members/{cast[1]}", token=demo_token)
+    check("a demo visitor can remove the cast", status == 204, f"got {status}")
+    status, _ = call("DELETE", f"/channels/{a_channel['id']}", token=demo_token)
+    check("a demo visitor can delete a channel", status == 204, f"got {status}")
+    status, _ = call(
+        "PATCH",
+        f"/guilds/{guild['id']}",
+        {"description": "vandalised"},
+        token=demo_token,
+    )
+    check("a demo visitor can edit the description", status == 200, f"got {status}")
+
+    demo_token = demo_login()
+    check(
+        "roles, roster, channels and description come back",
+        demo_snapshot() == clean,
+        f"{demo_snapshot()} != {clean}",
+    )
+
+    guild = demo_guild()
+    status, _ = call("PATCH", f"/guilds/{guild['id']}", {"name": "Mine now"}, token=demo_token)
+    check("a demo visitor can rename the guild", status == 200, f"got {status}")
+    demo_token = demo_login()
+    check("a rename comes back", demo_snapshot() == clean, str(demo_snapshot()))
+
+    guild = demo_guild()
+    status, _ = call("DELETE", f"/guilds/{guild['id']}", token=demo_token)
+    check("a demo visitor can delete the guild", status == 204, f"got {status}")
+    demo_token = demo_login()
+    check("a deleted guild comes back", demo_snapshot() == clean, str(demo_snapshot()))
+
+    # Giving the guild away, and pulling a stranger in through a link
+    guild = demo_guild()
+    _, rows = call("GET", f"/guilds/{guild['id']}/members", token=demo_token)
+    cast = [row["user_id"] for row in rows if row["role"] == "member"]
+    status, demo_link = call("POST", f"/guilds/{guild['id']}/invite-links", {}, token=demo_token)
+    check("a demo visitor can make an invite link", status == 201, f"got {status}")
+    stranger = register("demo_stranger")
+    status, _ = call("POST", f"/invites/{demo_link['code']}/accept", token=stranger["token"])
+    check("a stranger can come in through it", status == 200, f"got {status}")
+    status, _ = call(
+        "POST", f"/guilds/{guild['id']}/transfer", {"user_id": cast[0]}, token=demo_token
+    )
+    check("a demo visitor can give the guild away", status == 200, f"got {status}")
+
+    # A guild of someone else's that the visitor then joined
+    outside = register("demo_outside")
+    _, outside_guild = call(
+        "POST", "/guilds/", {"name": "Outside", "description": ""}, token=outside["token"]
+    )
+    _, outside_link = call(
+        "POST", f"/guilds/{outside_guild['id']}/invite-links", {}, token=outside["token"]
+    )
+    call("POST", f"/invites/{outside_link['code']}/accept", token=demo_token)
+
+    demo_token = demo_login()
+    check("a transferred guild comes back", demo_snapshot() == clean, str(demo_snapshot()))
+    _, stranger_guilds = call("GET", "/guilds/me", token=stranger["token"])
+    check("the stranger is out of it", stranger_guilds == [], str(stranger_guilds))
+    status, _ = call("GET", f"/invites/{demo_link['code']}")
+    check("the link is gone", status == 404, f"got {status}")
+    _, demo_channels = call("GET", "/channels/me", token=demo_token)
+    check(
+        "a guild the visitor joined leaves no channels behind",
+        not [c for c in demo_channels or [] if c.get("guild_id") == outside_guild["id"]],
+        str(demo_channels),
+    )
+
+print("== a hostile websocket client ==")
+# Fresh users: bob and alice share a DM that mallory has no part in
+ws_alice, ws_bob, ws_mallory = register("wa_alice"), register("wa_bob"), register("wa_mal")
+call(
+    "POST",
+    f"/friendship/friends/request?to_username={ws_bob['username']}",
+    token=ws_alice["token"],
+)
+_, ws_requests = call("GET", "/friendship/friends/request/me", token=ws_bob["token"])
+_, ws_accepted = call(
+    "POST",
+    f"/friendship/friends/request/{ws_requests[0]['id']}/accept",
+    token=ws_bob["token"],
+)
+# The probe's duplicate-key attempt needs a row to collide with
+psql(
+    "INSERT INTO messages (id, sender_id, channel_id, content, created_at) VALUES "
+    f"(gen_random_uuid(), '{ws_alice['id']}', '{ws_accepted['dm_channel_id']}', 'seed', now())"
+)
+run_probe(
+    "ws_abuse_probe.py",
+    {
+        "alice": ws_alice,
+        "bob": ws_bob,
+        "mallory": ws_mallory,
+        "channel_id": ws_accepted["dm_channel_id"],
+        "max_message_length": 4000,
+    },
+    "websocket abuse probe",
+)
+
 print("== realtime events from rest mutations ==")
 # Fresh users: this probe drives its own friend request and guild join
 run_probe(
@@ -1282,6 +2012,14 @@ if status == 201:
         },
         "attachment probe",
     )
+
+    _, dm_history = call("GET", f"/messages/{dm_channel_id}", token=alice["token"])
+    with_image = [m for m in dm_history or [] if m.get("attachments")][-1]
+    image_url = with_image["attachments"][0]["url"]
+    check("the image is served before its message is deleted", fetch_media(image_url)[0] == 200)
+    status, _ = call("DELETE", f"/messages/{with_image['id']}", token=alice["token"])
+    check("a message with an image can be deleted", status == 204, f"got {status}")
+    check("its image goes with it", fetch_media(image_url)[0] == 404)
 
 print("== voice (livekit sfu) ==")
 

@@ -1,9 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { FiImage, FiSend, FiX } from "react-icons/fi";
+import { FiEdit2, FiImage, FiSend, FiTrash2, FiX } from "react-icons/fi";
 import { type Message } from "../shared/types";
 import { useWebSocket } from "../utils/WebsocketProvider";
 import { useMessageStore } from "../shared/messageStore";
-import { EventType } from "../utils/eventType";
+import { useChannelStore } from "../shared/channelStore";
+import { deleteMessage, patchMessage } from "../shared/messageApiClient";
+import { errorText } from "../shared/errors";
+import { useGuildStore } from "../guild/guildStore";
+import {
+  GuildPermission,
+  allows,
+  outranks,
+  standingOf,
+  useGuildStanding,
+} from "../guild/permissions";
+import { eventBus } from "../utils/EventBus";
+import { EventAction, EventType, type EventPayload } from "../utils/eventType";
 import { useAuth } from "../auth/AuthContext";
 import { useUserStore } from "../shared/userStore";
 import Avatar from "../shared/Avatar";
@@ -92,17 +104,96 @@ function buildRows(messages: Message[]): Row[] {
   return rows;
 }
 
+/** Edit in place. Enter saves and Escape cancels, as in the composer. */
+function MessageEditor({
+  message,
+  onDone,
+}: {
+  message: Message;
+  onDone: () => void;
+}) {
+  const updateMessage = useMessageStore((state) => state.updateMessage);
+  const [text, setText] = useState(message.content);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  const save = async () => {
+    if (text === message.content) return onDone();
+    setBusy(true);
+    setError("");
+    try {
+      const saved = await patchMessage(message.id, text);
+      // Yours is the one client that must not wait for the event to catch up
+      updateMessage(message.id, {
+        content: saved.content,
+        edited_at: saved.edited_at,
+      });
+      onDone();
+    } catch (err) {
+      setError(errorText(err, "Could not save that edit."));
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="mt-0.5">
+      <textarea
+        autoFocus
+        aria-label="Edit message"
+        value={text}
+        rows={Math.min(text.split("\n").length, 8)}
+        maxLength={4000}
+        disabled={busy}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") onDone();
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            void save();
+          }
+        }}
+        className="w-full resize-none rounded-lg border border-white/10 bg-ink-850/80 px-3 py-2 text-[15px] text-white focus:outline-none focus:ring-2 focus:ring-rain-400/60"
+      />
+      {error ? (
+        <p className="text-xs text-red-300">{error}</p>
+      ) : (
+        <p className="text-[11px] text-ink-400">
+          Enter to save, Escape to cancel
+        </p>
+      )}
+    </div>
+  );
+}
+
 function MessageRow({
   message,
   grouped,
   isMine,
+  canDelete,
   selfName,
 }: {
   message: Message;
   grouped: boolean;
   isMine: boolean;
+  canDelete: boolean;
   selfName?: string;
 }) {
+  const removeMessage = useMessageStore((state) => state.removeMessage);
+  const [editing, setEditing] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState("");
+
+  const remove = async () => {
+    setError("");
+    try {
+      await deleteMessage(message.id);
+      removeMessage(message.id);
+    } catch (err) {
+      setError(errorText(err, "Could not delete that message."));
+      setConfirming(false);
+    }
+  };
+
   const author = useUserStore((state) => state.users[message.sender_id]);
   // The label says "You", but the avatar still needs a real name to derive an
   // initial from — the user store does not necessarily hold the current user.
@@ -111,10 +202,52 @@ function MessageRow({
 
   return (
     <div
-      className={`group flex gap-3 px-4 transition-colors hover:bg-white/[0.02] sm:px-6 ${
+      className={`group relative flex gap-3 px-4 transition-colors hover:bg-white/[0.02] sm:px-6 ${
         grouped ? "py-0.5" : "pb-0.5 pt-4"
       }`}
     >
+      {(isMine || canDelete) && !editing && (
+        // A tap on a phone sets :hover, so this needs nothing of its own there.
+        // No pointer events until then, or an invisible delete button would sit
+        // over the end of the first line of text.
+        <div className="pointer-events-none absolute right-4 top-0 z-10 flex items-center gap-0.5 rounded-lg border border-white/[0.07] bg-ink-900 p-0.5 opacity-0 transition-opacity focus-within:pointer-events-auto focus-within:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 sm:right-6">
+          {confirming ? (
+            <>
+              <button
+                onClick={() => void remove()}
+                className="rounded-md px-2 py-0.5 text-xs font-medium text-red-300 hover:bg-red-500/15"
+              >
+                Delete
+              </button>
+              <button
+                onClick={() => setConfirming(false)}
+                className="rounded-md px-2 py-0.5 text-xs text-ink-300 hover:bg-white/5"
+              >
+                Keep
+              </button>
+            </>
+          ) : (
+            <>
+              {isMine && (
+                <button
+                  onClick={() => setEditing(true)}
+                  aria-label="Edit message"
+                  className="rounded-md p-1.5 text-ink-400 hover:bg-white/5 hover:text-white"
+                >
+                  <FiEdit2 size={13} />
+                </button>
+              )}
+              <button
+                onClick={() => setConfirming(true)}
+                aria-label="Delete message"
+                className="rounded-md p-1.5 text-ink-400 hover:bg-white/5 hover:text-red-300"
+              >
+                <FiTrash2 size={13} />
+              </button>
+            </>
+          )}
+        </div>
+      )}
       {grouped ? (
         // Keeps the text aligned and shows the timestamp only on hover, which
         // is what stops a long run of messages becoming a wall of metadata.
@@ -151,11 +284,24 @@ function MessageRow({
         )}
         {/* A message can be images alone, and an empty paragraph would still
             take a line of height above them. */}
-        {message.content && (
-          <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-200">
-            {message.content}
-          </p>
+        {editing ? (
+          <MessageEditor message={message} onDone={() => setEditing(false)} />
+        ) : (
+          message.content && (
+            <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-200">
+              {message.content}
+              {message.edited_at && (
+                <span
+                  title={new Date(message.edited_at).toLocaleString()}
+                  className="ml-1.5 text-[10px] text-ink-500"
+                >
+                  (edited)
+                </span>
+              )}
+            </p>
+          )
         )}
+        {error && <p className="text-xs text-red-300">{error}</p>}
         <AttachmentGallery attachments={message.attachments ?? []} />
       </div>
     </div>
@@ -197,6 +343,25 @@ export function MessageView({
   const messages = getChannelMessages(channelId);
   const ws = getWs();
   const currentUser = getCurrentUser();
+
+  // Moderation only exists in a guild. A DM has no guild, so no standing, so
+  // `allows` is false and only your own messages get a delete button.
+  const guildId = useChannelStore(
+    (state) => state.channels[channelId]?.guild_id ?? undefined
+  );
+  const standing = useGuildStanding(guildId);
+  const guild = useGuildStore((state) =>
+    state.guilds.find((g) => g.id === guildId)
+  );
+  const guildMembers = useGuildStore((state) =>
+    guildId ? state.members[guildId] : undefined
+  );
+  const canModerate = (authorId: string) => {
+    if (!allows(standing, GuildPermission.MANAGE_MESSAGES)) return false;
+    const author = guildMembers?.find((m) => m.user_id === authorId);
+    // Someone who has left has no standing to be outranked by
+    return !author || outranks(standing, standingOf(guild, author));
+  };
   const currentUserId = currentUser?.id;
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -204,6 +369,7 @@ export function MessageView({
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState("");
+  const lastSentRef = useRef("");
   const attachments = useAttachmentDrafts(channelId);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -254,6 +420,19 @@ export function MessageView({
   const canSend =
     (!!draft.trim() || attachments.readyIds.length > 0) && !attachments.uploading;
 
+  // Sending clears the composer before the server has answered, so a refusal has
+  // to put the words back or they are simply gone.
+  useEffect(() => {
+    const onNotification = (event: EventPayload) => {
+      if (event.metadata?.action !== EventAction.RATE_LIMITED) return;
+      setSendError(event.text);
+      setDraft((current) => current || lastSentRef.current);
+      requestAnimationFrame(resizeInput);
+    };
+    eventBus.on(EventType.NOTIFICATION, onNotification);
+    return () => eventBus.off(EventType.NOTIFICATION, onNotification);
+  }, []);
+
   const sendMessage = () => {
     const text = draft.trim();
     if (!canSend) return;
@@ -273,6 +452,7 @@ export function MessageView({
         }),
       })
     );
+    lastSentRef.current = text;
     setDraft("");
     setSendError("");
     attachments.clear();
@@ -338,6 +518,10 @@ export function MessageView({
                 message={row.message}
                 grouped={row.grouped}
                 isMine={row.message.sender_id === currentUserId}
+                canDelete={
+                  row.message.sender_id === currentUserId ||
+                  canModerate(row.message.sender_id)
+                }
                 selfName={currentUser?.username}
               />
             )
@@ -416,6 +600,7 @@ export function MessageView({
             <textarea
               ref={inputRef}
               rows={1}
+              maxLength={4000}
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value);

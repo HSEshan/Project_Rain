@@ -10,12 +10,22 @@ from src.auth.cookies import (
 )
 from src.auth.schemas import Token, UserCreate, UserResponse
 from src.auth.service import AuthService, get_auth_service
+from src.core.rate_limit import (
+    LOGIN_IP,
+    REFRESH_IP,
+    REGISTER_IP,
+    limit_ip,
+    limit_login_account,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post(
-    "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
+    "/register",
+    response_model=UserResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(limit_ip(REGISTER_IP))],
 )
 async def register_user(
     user: UserCreate, service: AuthService = Depends(get_auth_service)
@@ -23,7 +33,12 @@ async def register_user(
     return await service.register_user(user)
 
 
-@router.post("/login", response_model=Token, status_code=status.HTTP_200_OK)
+@router.post(
+    "/login",
+    response_model=Token,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(limit_ip(LOGIN_IP)), Depends(limit_login_account)],
+)
 async def login_user(
     response: Response,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
@@ -38,7 +53,14 @@ async def login_user(
     return session.access_token
 
 
-@router.post("/refresh", response_model=Token, status_code=status.HTTP_200_OK)
+@router.post(
+    "/refresh",
+    response_model=Token,
+    status_code=status.HTTP_200_OK,
+    # A dependency, so a refusal never reaches the handler below: a 429 says
+    # nothing about the token, and must not clear its cookie.
+    dependencies=[Depends(limit_ip(REFRESH_IP))],
+)
 async def refresh_session(
     response: Response,
     rain_refresh: Annotated[Optional[str], Cookie(alias=REFRESH_COOKIE_NAME)] = None,

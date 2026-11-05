@@ -6,6 +6,8 @@ export enum EventType {
   // Presence only — someone joined or left a voice channel. The audio itself
   // is between the browser and the SFU and never appears on this socket.
   VOICE_STATE = "voice_state",
+  /** A message already in the channel was edited or deleted. */
+  MESSAGE_UPDATE = "message_update",
 }
 
 /** Values of `metadata.action`. Mirrors `EventAction` in libs. */
@@ -21,6 +23,12 @@ export enum EventAction {
    * stale, so the client refetches those two things and nothing else.
    */
   GROUP_DM_UPDATED = "group_dm_updated",
+  /** A guild you stay in changed name, roster or roles. Same reasoning. */
+  GUILD_UPDATED = "guild_updated",
+  /** This socket is sending too fast. `metadata.retry_after` is in seconds. */
+  RATE_LIMITED = "rate_limited",
+  MESSAGE_EDITED = "message_edited",
+  MESSAGE_DELETED = "message_deleted",
   VOICE_JOINED = "voice_joined",
   VOICE_LEFT = "voice_left",
 }

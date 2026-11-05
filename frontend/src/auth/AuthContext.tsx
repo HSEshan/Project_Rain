@@ -5,7 +5,7 @@ import {
   resetSessionExpiry,
 } from "../shared/session";
 import { postLogout } from "./apiClient";
-import { refreshSession, tokenNeedsRefresh } from "./refresh";
+import { refreshSession, sessionIsOver, tokenNeedsRefresh } from "./refresh";
 import {
   clearSession,
   readToken,
@@ -105,7 +105,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         resetSessionExpiry();
         adopt(renewed);
       } else {
-        clearSession();
+        // Only when the server refused. A 429 or an outage during a reload says
+        // nothing about the session, and clearing here would erase the hint
+        // cookie, stranding a refresh cookie that still works: nothing would
+        // ever try it again. Left alone, the next load picks it back up.
+        if (sessionIsOver()) clearSession();
         setIsAuthenticated(false);
         setToken(null);
         setUser(null);

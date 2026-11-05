@@ -8,7 +8,7 @@ import React, {
   useCallback,
 } from "react";
 import { useAuth } from "../auth/AuthContext";
-import { refreshSession } from "../auth/refresh";
+import { refreshSession, sessionIsOver } from "../auth/refresh";
 import { eventBus } from "./EventBus";
 import { emitResync } from "../shared/resync";
 import { emitSessionExpired } from "../shared/session";
@@ -143,11 +143,20 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({
         renewedForOutageRef.current = true;
         shouldReconnectRef.current = false;
         void refreshSession({ force: true }).then((renewed) => {
+          shouldReconnectRef.current = true;
           if (!renewed) {
-            emitSessionExpired();
+            if (sessionIsOver()) {
+              shouldReconnectRef.current = false;
+              emitSessionExpired();
+            } else {
+              // Nothing was rotated, so nothing was spent. Left set, the next
+              // refusal would skip renewal and this tab would retry the refused
+              // token until someone reloaded it.
+              renewedForOutageRef.current = false;
+              scheduleReconnect();
+            }
             return;
           }
-          shouldReconnectRef.current = true;
           retryCountRef.current = 0;
           connect(renewed);
         });

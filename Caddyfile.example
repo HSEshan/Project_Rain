@@ -34,6 +34,10 @@
 
     # --- API (HTTP) --- body limit just above rest_api's MAX_UPLOAD_BYTES
     # (8 MB), and equal to nginx.conf.example's client_max_body_size.
+    #
+    # Rate limits key on X-Real-IP. Nginx overwrites it with the peer it saw and
+    # this passes it through untouched, which is what makes it safe to trust. Do
+    # not point rest_api at X-Forwarded-For: its leftmost entry is client-chosen.
     handle_path /api/* {
         request_body {
             max_size 10MB

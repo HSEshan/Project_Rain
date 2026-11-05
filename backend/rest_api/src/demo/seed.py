@@ -29,7 +29,9 @@ from libs.db import (
     FriendRequest,
     Friendship,
     Guild,
+    GuildBan,
     GuildInvite,
+    GuildInviteLink,
     GuildMember,
     GuildMemberRole,
     GuildMemberStatus,
@@ -40,6 +42,7 @@ from libs.db import (
 )
 from sqlalchemy import delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from src.channel.repository import ChannelRepository
 from src.demo.data import (
     DEMO,
     DEMO_BIO,
@@ -178,6 +181,11 @@ async def ensure_demo_data(db: AsyncSession) -> User:
         db.add(guild)
         await db.flush()
         logger.info("Created demo guild", guild_id=str(guild.id))
+    # Canonical, like a seeded bio. The visitor owns this guild, so they can
+    # rewrite it. A rename needs nothing here: the lookup above then misses, a
+    # fresh guild is built, and the renamed one is deleted as a stray.
+    elif guild.description != DEMO_GUILD_DESCRIPTION:
+        guild.description = DEMO_GUILD_DESCRIPTION
 
     # The visitor is an admin so they can try creating a channel and inviting
     members = {demo_user.id: GuildMemberRole.ADMIN} | {
@@ -189,7 +197,8 @@ async def ensure_demo_data(db: AsyncSession) -> User:
                 GuildMember.guild_id == guild.id, GuildMember.user_id == user_id
             )
         )
-        if not existing.scalar_one_or_none():
+        member = existing.scalar_one_or_none()
+        if not member:
             db.add(
                 GuildMember(
                     guild_id=guild.id,
@@ -198,6 +207,10 @@ async def ensure_demo_data(db: AsyncSession) -> User:
                     status=GuildMemberStatus.ACTIVE,
                 )
             )
+        # A visitor can promote the cast, and the next one should not find them
+        # already promoted.
+        elif member.role != role:
+            member.role = role
     await db.flush()
 
     # --- its channels ----------------------------------------------------
@@ -268,21 +281,6 @@ async def _seed_users(db: AsyncSession) -> dict[str, User]:
     return {user.email.split("@")[0]: user for user in result.scalars().all()}
 
 
-async def _delete_channels(db: AsyncSession, channel_ids: list[str]) -> None:
-    """Drop channels and everything that points at them.
-
-    Order matters: `messages` and `channel_members` both have a foreign key to
-    `channels` with no cascade, so they go first.
-    """
-    if not channel_ids:
-        return
-    await db.execute(delete(Message).where(Message.channel_id.in_(channel_ids)))
-    await db.execute(
-        delete(ChannelMember).where(ChannelMember.channel_id.in_(channel_ids))
-    )
-    await db.execute(delete(Channel).where(Channel.id.in_(channel_ids)))
-
-
 async def reset_demo_state(
     db: AsyncSession, stale_media: list[str] | None = None
 ) -> User:
@@ -328,23 +326,38 @@ async def reset_demo_state(
         demo_guild.icon_key = None
 
     # --- guilds the visitor created --------------------------------------
+    # Owned by anyone in the cast rather than by the visitor, because the visitor
+    # can transfer a guild to one of them, the demo guild included. The lookup
+    # above then builds a fresh one, and the old one is caught here.
     stray_guilds = await db.execute(
-        select(Guild.id).where(
-            Guild.owner_id == demo_user.id, Guild.id != demo_guild.id
+        select(Guild.id, Guild.icon_key).where(
+            Guild.owner_id.in_(seed_user_ids), Guild.id != demo_guild.id
         )
     )
-    for guild_id in stray_guilds.scalars().all():
+    for guild_id, icon_key in stray_guilds.all():
+        if icon_key and stale_media is not None:
+            stale_media.append(icon_key)
         channel_ids = (
             (await db.execute(select(Channel.id).where(Channel.guild_id == guild_id)))
             .scalars()
             .all()
         )
-        await _delete_channels(db, list(channel_ids))
+        await ChannelRepository.delete_channels(db, list(channel_ids))
         await db.execute(delete(GuildInvite).where(GuildInvite.guild_id == guild_id))
         await db.execute(delete(GuildMember).where(GuildMember.guild_id == guild_id))
         await db.execute(delete(Guild).where(Guild.id == guild_id))
 
     # --- guilds the visitor joined, and invites they were sent ------------
+    await db.execute(
+        delete(ChannelMember).where(
+            ChannelMember.user_id == demo_user.id,
+            ChannelMember.channel_id.in_(
+                select(Channel.id).where(
+                    Channel.guild_id.is_not(None), Channel.guild_id != demo_guild.id
+                )
+            ),
+        )
+    )
     await db.execute(
         delete(GuildMember).where(
             GuildMember.user_id == demo_user.id,
@@ -354,6 +367,34 @@ async def reset_demo_state(
     await db.execute(delete(GuildInvite).where(GuildInvite.user_id == demo_user.id))
     await db.execute(delete(GuildInvite).where(GuildInvite.inviter_id == demo_user.id))
 
+    await db.execute(delete(GuildBan).where(GuildBan.guild_id == demo_guild.id))
+
+    # --- invite links, and anyone who came in through one -----------------
+    # A link is the one way a visitor can pull strangers into the demo guild, and
+    # the next visitor should not find them there.
+    await db.execute(
+        delete(GuildInviteLink).where(
+            or_(
+                GuildInviteLink.guild_id == demo_guild.id,
+                GuildInviteLink.creator_id == demo_user.id,
+            )
+        )
+    )
+    await db.execute(
+        delete(ChannelMember).where(
+            ChannelMember.user_id.notin_(seed_user_ids),
+            ChannelMember.channel_id.in_(
+                select(Channel.id).where(Channel.guild_id == demo_guild.id)
+            ),
+        )
+    )
+    await db.execute(
+        delete(GuildMember).where(
+            GuildMember.guild_id == demo_guild.id,
+            GuildMember.user_id.notin_(seed_user_ids),
+        )
+    )
+
     # --- channels the visitor added to the demo guild ---------------------
     keep_names = [definition.name for definition in DEMO.channels]
     stray_channels = await db.execute(
@@ -361,7 +402,7 @@ async def reset_demo_state(
             Channel.guild_id == demo_guild.id, Channel.name.notin_(keep_names)
         )
     )
-    await _delete_channels(db, list(stray_channels.scalars().all()))
+    await ChannelRepository.delete_channels(db, list(stray_channels.scalars().all()))
 
     # --- DMs with anyone outside the seeded cast --------------------------
     demo_channel_ids = select(ChannelMember.channel_id).where(
@@ -376,7 +417,7 @@ async def reset_demo_state(
             ChannelMember.user_id.notin_(seed_user_ids),
         )
     )
-    await _delete_channels(db, list(set(stray_dms.scalars().all())))
+    await ChannelRepository.delete_channels(db, list(set(stray_dms.scalars().all())))
 
     # --- group DMs, all of them -------------------------------------------
     # The seed creates none, so every group the demo account is in was made by
@@ -389,7 +430,9 @@ async def reset_demo_state(
             Channel.id.in_(demo_channel_ids),
         )
     )
-    await _delete_channels(db, list(set(stray_groups.scalars().all())))
+    await ChannelRepository.delete_channels(
+        db, list(set(stray_groups.scalars().all()))
+    )
 
     # --- friendships and requests outside the seeded cast -----------------
     await db.execute(

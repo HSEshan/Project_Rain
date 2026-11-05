@@ -7,6 +7,7 @@ import { Button } from "../shared/Button";
 import { Input } from "../shared/Input";
 import { loginErrorText } from "../shared/errors";
 import { consumeSessionExpired } from "../shared/session";
+import { takeInvitePath } from "../guild/pendingInvite";
 import { postLogin } from "./apiClient";
 
 export default function LoginForm() {
@@ -34,7 +35,7 @@ export default function LoginForm() {
       .then((res: AxiosResponse) => {
         if (res.status === 200) {
           login(res.data.access_token);
-          navigate("/home");
+          navigate(takeInvitePath() ?? "/home");
         }
       })
       .catch((err: unknown) => {

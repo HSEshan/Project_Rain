@@ -16,4 +16,6 @@ COPY ./ws_gateway /app
 # Install ws_gateway dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+# --ws-max-size: the largest honest frame is a 4000 character message, escaped.
+# uvicorn's default is 16 MB, read and parsed before anything can look at it.
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--ws-max-size", "65536"]

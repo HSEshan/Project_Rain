@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Nightly Postgres dump for Project Rain.
+# Nightly backup for Project Rain: a Postgres dump and the uploaded images.
 #
 # There is real user data in the postgres volume — accounts, friendships, every
 # message — and until this existed there was no copy of any of it. One `docker
@@ -18,6 +18,10 @@
 # Copying the file off the box is a decision with a cost (where to, who pays,
 # what it means for the data) and is left to whoever runs this. `OFFSITE_CMD`
 # below is the hook.
+#
+# The two files belong together. Rows hold image *keys*, so a dump restored
+# without its media archive brings back avatars and attachments whose files are
+# gone. Restore a pair with the same timestamp.
 
 set -euo pipefail
 
@@ -37,6 +41,11 @@ fi
 # How many dumps to keep. At one a night this is a month of history; each is a
 # few hundred kilobytes gzipped at this size.
 KEEP="${KEEP:-30}"
+# Media archives are full copies and grow with every upload, where a dump stays
+# small, so they get their own and much shorter history. Keys are write-once, so
+# the newest archive holds every image still in use anyway; the older ones only
+# cover an image deleted by mistake.
+MEDIA_KEEP="${MEDIA_KEEP:-7}"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "backup: $ENV_FILE not found. Run this from the repository root." >&2
@@ -90,25 +99,66 @@ fi
 mv "$PARTIAL" "$TARGET"
 echo "backup: wrote $(du -h "$TARGET" | cut -f1) to $TARGET ($TABLE_COUNT tables)"
 
-# Optional off-box copy. Set it to whatever you actually use:
+# Rotates `<prefix>-*<suffix>` down to the newest $3. Only ever called after a
+# new file has been written and checked: pruning first would mean a failing
+# backup quietly eats the history it was meant to add to.
+prune() {
+  local prefix="$1" suffix="$2" keep="$3" count
+  count="$(find "$BACKUP_DIR" -maxdepth 1 -name "${prefix}-*${suffix}" | wc -l)"
+  if [ "$count" -gt "$keep" ]; then
+    find "$BACKUP_DIR" -maxdepth 1 -name "${prefix}-*${suffix}" \
+      | sort | head -n "$((count - keep))" \
+      | while read -r old; do
+          echo "backup: pruning $(basename "$old")"
+          rm -f "$old"
+        done
+  fi
+}
+
+# Optional off-box copy. Set it to whatever you actually use; it runs once per
+# file, with the file as $1:
 #   OFFSITE_CMD='rsync -a "$1" backups@elsewhere:/srv/rain/'
 #   OFFSITE_CMD='aws s3 cp "$1" s3://my-bucket/rain/'
-if [ -n "${OFFSITE_CMD:-}" ]; then
-  echo "backup: copying off-box"
-  bash -c "$OFFSITE_CMD" _ "$TARGET"
+offsite() {
+  if [ -n "${OFFSITE_CMD:-}" ]; then
+    echo "backup: copying $(basename "$1") off-box"
+    bash -c "$OFFSITE_CMD" _ "$1"
+  fi
+}
+
+offsite "$TARGET"
+prune "$POSTGRES_DB" ".sql.gz" "$KEEP"
+
+# Second, and in its own right: by now the dump is safely on disk, so a failure
+# here must not cost it. It still exits non-zero, so cron reports it.
+#
+# Through rest_api because it is the service that mounts the volume read-write.
+# A plain tar, not gzip: every file in it is already compressed WebP. With
+# STORAGE_BACKEND=s3 the volume is empty and this writes an empty archive, which
+# is correct: the bucket is the store then.
+MEDIA_TARGET="$BACKUP_DIR/media-${STAMP}.tar"
+MEDIA_PARTIAL="$MEDIA_TARGET.partial"
+
+echo "backup: archiving uploaded images to $MEDIA_TARGET"
+if ! $COMPOSE exec -T rest_api tar -C /data/media -cf - . > "$MEDIA_PARTIAL"; then
+  rm -f "$MEDIA_PARTIAL"
+  echo "backup: archiving media failed, the database dump above is unaffected" >&2
+  exit 1
 fi
 
-# Prune last, and only after a new dump has been written and checked. Doing it
-# first would mean a failing backup quietly eats the history it was meant to
-# add to.
-COUNT="$(find "$BACKUP_DIR" -maxdepth 1 -name "${POSTGRES_DB}-*.sql.gz" | wc -l)"
-if [ "$COUNT" -gt "$KEEP" ]; then
-  find "$BACKUP_DIR" -maxdepth 1 -name "${POSTGRES_DB}-*.sql.gz" \
-    | sort | head -n "$((COUNT - KEEP))" \
-    | while read -r old; do
-        echo "backup: pruning $(basename "$old")"
-        rm -f "$old"
-      done
+# Unlike a dump, an archive with no files in it is a legitimate result: nobody
+# has uploaded anything yet. So this checks that it is a tar, not that it is full.
+if ! MEDIA_LIST="$(tar -tf "$MEDIA_PARTIAL")"; then
+  rm -f "$MEDIA_PARTIAL"
+  echo "backup: the media archive is not a valid tar" >&2
+  exit 1
 fi
+MEDIA_FILES="$(printf '%s\n' "$MEDIA_LIST" | grep -c -v '/$' || true)"
 
-echo "backup: done, $(find "$BACKUP_DIR" -maxdepth 1 -name "${POSTGRES_DB}-*.sql.gz" | wc -l) kept"
+mv "$MEDIA_PARTIAL" "$MEDIA_TARGET"
+echo "backup: wrote $(du -h "$MEDIA_TARGET" | cut -f1) to $MEDIA_TARGET ($MEDIA_FILES files)"
+
+offsite "$MEDIA_TARGET"
+prune "media" ".tar" "$MEDIA_KEEP"
+
+echo "backup: done, $(find "$BACKUP_DIR" -maxdepth 1 -name "${POSTGRES_DB}-*.sql.gz" | wc -l) dumps and $(find "$BACKUP_DIR" -maxdepth 1 -name "media-*.tar" | wc -l) media archives kept"

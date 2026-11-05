@@ -6,27 +6,38 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 from libs.db import (
+    CALLABLE_CHANNEL_TYPES,
     Channel,
     ChannelMember,
     Guild,
+    GuildBan,
     GuildInvite,
+    GuildInviteLink,
     GuildMember,
     GuildMemberRole,
-    GuildMemberStatus,
     User,
 )
 from src.auth.utils import CurrentUser
 from src.database.core import get_db
 from src.database.service import BaseService
+from src.channel.repository import ChannelRepository
+from src.guild.permissions import GuildPermission, can_assign, outranks
 from src.guild.repository import GuildRepository
-from src.guild.schemas import GuildCreate, GuildInviteSummary
+from src.guild.schemas import (
+    GuildBanResponse,
+    GuildCreate,
+    GuildInviteSummary,
+    GuildUpdate,
+)
 from src.media.images import ImageKind
 from src.media.service import store_image
 from src.media.storage import delete_quietly
 from src.realtime import events
 from src.realtime.publisher import realtime_publisher
+from src.voice.room_service import close_rooms, remove_from_rooms
 from src.utils.exceptions import (
     AlreadyExistsException,
+    BadRequestException,
     ForbiddenException,
     NotFoundException,
 )
@@ -146,8 +157,10 @@ class GuildService(BaseService):
             if str(user_to_invite) == str(user.id):
                 raise AlreadyExistsException("You are already a member of this guild")
 
+            await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.INVITE
+            )
             guild = await self.get_guild_by_id(guild_id)
-            await self.check_guild_member(user.id, guild_id)
 
             existing_member = await self.db.execute(
                 select(GuildMember).where(
@@ -157,6 +170,9 @@ class GuildService(BaseService):
             )
             if existing_member.scalar_one_or_none():
                 raise AlreadyExistsException("User is already a member of this guild")
+
+            if await GuildRepository.is_banned(self.db, guild_id, user_to_invite):
+                raise ForbiddenException("That user is banned from this guild")
 
             # (guild_id, user_id) is the invite primary key — one open invite per user
             existing_invite = await self.db.execute(
@@ -228,31 +244,12 @@ class GuildService(BaseService):
             if existing_member.scalar_one_or_none():
                 raise AlreadyExistsException("You are already a member of this guild")
 
-            guild_member = GuildMember(
-                guild_id=result.guild_id,
-                user_id=user.id,
-                status=GuildMemberStatus.ACTIVE,
-                role=GuildMemberRole.MEMBER,
-            )
-            self.db.add(guild_member)
-            await self.db.flush()
-            await self.db.refresh(guild_member)
-
-            # Joining a guild joins every channel that already exists in it
-            guild_channels = await GuildRepository.get_guild_channels(
-                self.db, result.guild_id
-            )
-            self.db.add_all(
-                [
-                    ChannelMember(channel_id=channel.id, user_id=user.id)
-                    for channel in guild_channels
-                ]
-            )
-            await self.db.flush()
-
             guild_id = str(result.guild_id)
-            # The invite is single use
-            await self.db.delete(result)
+            # Also consumes the invite, which is single use
+            guild_member = await GuildRepository.join_guild(
+                self.db, guild_id, user.id
+            )
+            others = await self._member_ids(guild_id, excluding=user.id)
 
         # The joiner is now a member of every channel in the guild
         await realtime_publisher.invalidate_user_channels(user.id)
@@ -263,6 +260,9 @@ class GuildService(BaseService):
                 text="You joined a guild",
                 guild_id=guild_id,
             )
+        )
+        await self._publish_guild_updated(
+            user.id, guild_id, others, f"{user.name} joined"
         )
         return guild_member
 
@@ -301,49 +301,307 @@ class GuildService(BaseService):
         return True
 
     async def remove_guild_member(
-        self, user: CurrentUser, guild_id: str, member_id: str
+        self, user: CurrentUser, guild_id: str, member_id: str, ban: bool = False
     ) -> bool:
         async with self.db.begin():
-            admin_member = await self.db.execute(
-                select(GuildMember).where(
-                    GuildMember.guild_id == guild_id, GuildMember.user_id == user.id
-                )
+            actor = await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.KICK
             )
-            result = admin_member.scalar_one_or_none()
-            if not result or result.role != GuildMemberRole.ADMIN:
-                raise ForbiddenException("You are not an admin of this guild")
-
-            guild_member = await self.db.execute(
-                select(GuildMember).where(
-                    GuildMember.guild_id == guild_id, GuildMember.user_id == member_id
-                )
-            )
-            result = guild_member.scalar_one_or_none()
-            if not result:
+            target = await GuildRepository.get_standing(self.db, guild_id, member_id)
+            if target is None:
                 raise NotFoundException("Member not found")
-
-            # Leaving the guild leaves every channel in it
-            await self.db.execute(
-                delete(ChannelMember).where(
-                    ChannelMember.user_id == member_id,
-                    ChannelMember.channel_id.in_(
-                        select(Channel.id).where(Channel.guild_id == guild_id)
-                    ),
+            if not outranks(actor, target):
+                raise ForbiddenException(
+                    "You can only remove people below you in this guild"
                 )
-            )
-            await self.db.delete(result)
-            await self.db.flush()
+
+            rooms = await self._voice_rooms(guild_id)
+            await self._drop_member(guild_id, member_id)
+            if ban:
+                self.db.add(
+                    GuildBan(guild_id=guild_id, user_id=member_id, banned_by=user.id)
+                )
+                # An open invite would only fail when accepted
+                await self.db.execute(
+                    delete(GuildInvite).where(
+                        GuildInvite.guild_id == guild_id,
+                        GuildInvite.user_id == member_id,
+                    )
+                )
+            remaining = await self._member_ids(guild_id)
 
         await realtime_publisher.invalidate_user_channels(member_id)
         await realtime_publisher.publish(
             events.channels_changed(
                 actor_id=user.id,
                 to_user_id=member_id,
-                text="You were removed from a guild",
+                text=f"You were {'banned' if ban else 'removed'} from a guild",
                 guild_id=guild_id,
             )
         )
+        await self._publish_guild_updated(
+            user.id, guild_id, remaining, "A member was removed"
+        )
+        await remove_from_rooms(rooms, member_id)
         return True
+
+    async def list_bans(
+        self, user: CurrentUser, guild_id: str
+    ) -> list[GuildBanResponse]:
+        async with self.db.begin():
+            await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.KICK
+            )
+            rows = await self.db.execute(
+                select(GuildBan.user_id, User.username, GuildBan.created_at)
+                .join(User, User.id == GuildBan.user_id)
+                .where(GuildBan.guild_id == guild_id)
+                .order_by(GuildBan.created_at.desc())
+            )
+            return [
+                GuildBanResponse(
+                    user_id=str(user_id), username=username, created_at=created_at
+                )
+                for user_id, username, created_at in rows.all()
+            ]
+
+    async def remove_ban(
+        self, user: CurrentUser, guild_id: str, banned_id: str
+    ) -> None:
+        """Lets them back in by invite. Does not bring them back."""
+        async with self.db.begin():
+            await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.KICK
+            )
+            result = await self.db.execute(
+                delete(GuildBan)
+                .where(GuildBan.guild_id == guild_id, GuildBan.user_id == banned_id)
+                .returning(GuildBan.user_id)
+            )
+            if result.first() is None:
+                raise NotFoundException("That user is not banned")
+
+    async def leave_guild(self, user: CurrentUser, guild_id: str) -> None:
+        """Leave by your own choice.
+
+        Not `remove_guild_member`, whose rank rule refuses acting on yourself. The
+        owner cannot leave: a guild is not left behind with nobody at the top, so
+        it has to be given away or deleted first.
+        """
+        async with self.db.begin():
+            standing = await GuildRepository.get_standing(self.db, guild_id, user.id)
+            if standing is None:
+                raise NotFoundException("You are not a member of this guild")
+            if standing.is_owner:
+                raise ForbiddenException(
+                    "Transfer the guild or delete it before you leave"
+                )
+            rooms = await self._voice_rooms(guild_id)
+            await self._drop_member(guild_id, user.id)
+            remaining = await self._member_ids(guild_id)
+
+        await realtime_publisher.invalidate_user_channels(user.id)
+        await realtime_publisher.publish(
+            events.channels_changed(
+                actor_id=user.id,
+                to_user_id=user.id,
+                text="You left a guild",
+                guild_id=guild_id,
+            )
+        )
+        await self._publish_guild_updated(
+            user.id, guild_id, remaining, f"{user.name} left"
+        )
+        await remove_from_rooms(rooms, str(user.id))
+
+    async def transfer_ownership(
+        self, user: CurrentUser, guild_id: str, new_owner_id: str
+    ) -> Guild:
+        async with self.db.begin():
+            await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.TRANSFER_OWNERSHIP
+            )
+            if str(new_owner_id) == str(user.id):
+                raise BadRequestException("You already own this guild")
+            member = await self.db.execute(
+                select(GuildMember).where(
+                    GuildMember.guild_id == guild_id,
+                    GuildMember.user_id == new_owner_id,
+                )
+            )
+            member = member.scalar_one_or_none()
+            if not member:
+                raise NotFoundException("Member not found")
+
+            guild = await self.get_guild_by_id(guild_id)
+            guild.owner_id = new_owner_id
+            # The owner always holds the admin row, see `permissions.py`. The old
+            # owner's row already says admin, so they simply stay one.
+            member.role = GuildMemberRole.ADMIN
+            await self.db.flush()
+            await self.db.refresh(guild)
+            members = await self._member_ids(guild_id)
+
+        await self._publish_guild_updated(
+            user.id, guild_id, members, f"{guild.name} has a new owner"
+        )
+        return guild
+
+    async def _voice_rooms(self, guild_id: str) -> list[str]:
+        """Callers must already hold the transaction. Room id is the channel id."""
+        return self._rooms_of(
+            await GuildRepository.get_guild_channels(self.db, guild_id)
+        )
+
+    @staticmethod
+    def _rooms_of(channels: list[Channel]) -> list[str]:
+        return [
+            str(channel.id)
+            for channel in channels
+            if channel.type in CALLABLE_CHANNEL_TYPES
+        ]
+
+    async def _drop_member(self, guild_id: str, member_id: str) -> None:
+        """Callers must already hold the transaction. Leaving a guild leaves every
+        channel in it, whoever decided, and ends any link they made: a kick that
+        the kicked person can undo with a URL they kept is no kick at all."""
+        await self.db.execute(
+            delete(GuildInviteLink).where(
+                GuildInviteLink.guild_id == guild_id,
+                GuildInviteLink.creator_id == member_id,
+            )
+        )
+        await self.db.execute(
+            delete(ChannelMember).where(
+                ChannelMember.user_id == member_id,
+                ChannelMember.channel_id.in_(
+                    select(Channel.id).where(Channel.guild_id == guild_id)
+                ),
+            )
+        )
+        await self.db.execute(
+            delete(GuildMember).where(
+                GuildMember.guild_id == guild_id, GuildMember.user_id == member_id
+            )
+        )
+
+    async def update_guild(
+        self, user: CurrentUser, guild_id: str, update: GuildUpdate
+    ) -> Guild:
+        """Apply only what the body named, see `GuildUpdate`."""
+        async with self.db.begin():
+            await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.MANAGE_GUILD
+            )
+            guild = await self.get_guild_by_id(guild_id)
+            if "name" in update.model_fields_set:
+                guild.name = update.name
+            if "description" in update.model_fields_set:
+                guild.description = update.description
+            await self.db.flush()
+            await self.db.refresh(guild)
+            members = await self._member_ids(guild_id)
+
+        await self._publish_guild_updated(
+            user.id, guild_id, members, f"{guild.name} was updated"
+        )
+        return guild
+
+    async def delete_guild(self, user: CurrentUser, guild_id: str) -> None:
+        """Remove the guild and everything under it.
+
+        Invites and member rows go by cascade. Channels do not: `channels` has
+        no cascade from `guilds`, so they are deleted here first, or this fails
+        on the foreign key.
+        """
+        async with self.db.begin():
+            await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.DELETE_GUILD
+            )
+            guild = await self.get_guild_by_id(guild_id)
+            name, icon_key = guild.name, guild.icon_key
+            members = await self._member_ids(guild_id)
+            channels = await GuildRepository.get_guild_channels(self.db, guild_id)
+            rooms = self._rooms_of(channels)
+            await ChannelRepository.delete_channels(
+                self.db, [channel.id for channel in channels]
+            )
+            await self.db.delete(guild)
+
+        await delete_quietly([icon_key])
+        # Membership changed for every one of them, the owner included: their
+        # sockets are still mapped to channels that no longer exist.
+        await realtime_publisher.invalidate_user_channels(*members)
+        await realtime_publisher.publish_many(
+            events.channels_changed(
+                actor_id=user.id,
+                to_user_id=member_id,
+                text=f"{name} was deleted",
+                guild_id=guild_id,
+            )
+            for member_id in members
+        )
+        await close_rooms(rooms)
+
+    async def update_member_role(
+        self,
+        user: CurrentUser,
+        guild_id: str,
+        member_id: str,
+        role: GuildMemberRole,
+    ) -> GuildMember:
+        async with self.db.begin():
+            actor = await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.MANAGE_ROLES
+            )
+            target = await GuildRepository.get_standing(self.db, guild_id, member_id)
+            if target is None:
+                raise NotFoundException("Member not found")
+            if not can_assign(actor, target, role):
+                raise ForbiddenException(
+                    "You can only change the role of people below you in this guild"
+                )
+
+            member = await self.db.execute(
+                select(GuildMember).where(
+                    GuildMember.guild_id == guild_id, GuildMember.user_id == member_id
+                )
+            )
+            member = member.scalar_one()
+            member.role = role
+            await self.db.flush()
+            members = await self._member_ids(guild_id)
+
+        await self._publish_guild_updated(
+            user.id, guild_id, members, "A member's role changed"
+        )
+        return member
+
+    async def _member_ids(
+        self, guild_id: str, excluding: str | None = None
+    ) -> list[str]:
+        """Callers must already hold the transaction."""
+        result = await self.db.execute(
+            select(GuildMember.user_id).where(GuildMember.guild_id == guild_id)
+        )
+        return [
+            str(member_id)
+            for member_id in result.scalars()
+            if str(member_id) != str(excluding)
+        ]
+
+    async def _publish_guild_updated(
+        self, actor_id: str, guild_id: str, member_ids: list[str], text: str
+    ) -> None:
+        await realtime_publisher.publish_many(
+            events.guild_updated(
+                actor_id=actor_id,
+                to_user_id=member_id,
+                guild_id=guild_id,
+                text=text,
+            )
+            for member_id in member_ids
+        )
 
     async def set_icon(
         self, user: CurrentUser, guild_id: str, upload: UploadFile
@@ -354,7 +612,9 @@ class GuildService(BaseService):
         server decode an image it is only going to refuse to keep.
         """
         async with self.db.begin():
-            await self._require_admin(user.id, guild_id)
+            await GuildRepository.require_permission(
+                self.db, guild_id, user.id, GuildPermission.MANAGE_GUILD
+            )
         key, _ = await store_image(upload, ImageKind.ICON, f"guild-icons/{guild_id}")
         return await self._swap_icon(user, guild_id, key)
 
@@ -368,8 +628,10 @@ class GuildService(BaseService):
             # Checked again inside the transaction that writes: the admin may
             # have been demoted while the image was being processed.
             try:
-                await self._require_admin(user.id, guild_id)
-            except ForbiddenException:
+                await GuildRepository.require_permission(
+                    self.db, guild_id, user.id, GuildPermission.MANAGE_GUILD
+                )
+            except (ForbiddenException, NotFoundException):
                 await delete_quietly([key])
                 raise
             guild = await self.get_guild_by_id(guild_id)
@@ -379,23 +641,6 @@ class GuildService(BaseService):
         # changed it finds out, because rest_api does not publish to the actor.
         await delete_quietly([old_key])
         return guild
-
-    async def _require_admin(self, user_id: str, guild_id: str) -> None:
-        """The same rule `remove_guild_member` applies, in one place for icons.
-
-        Phase 18 replaces this with a real permission check; until then an
-        admin is the role the guild's creator gets.
-        """
-        member = await self.db.execute(
-            select(GuildMember).where(
-                GuildMember.guild_id == guild_id, GuildMember.user_id == user_id
-            )
-        )
-        member = member.scalar_one_or_none()
-        if not member:
-            raise NotFoundException("Guild not found")
-        if member.role != GuildMemberRole.ADMIN:
-            raise ForbiddenException("Only a guild admin can change the icon")
 
     async def get_guild_members(self, guild_id: str) -> list[GuildMember]:
         guild_members = await self.db.execute(

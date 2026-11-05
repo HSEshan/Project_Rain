@@ -1,14 +1,15 @@
 import apiClient from "../utils/apiClientBase";
 import type { Channel, ChannelMember } from "./types";
 
+/**
+ * Lets a failure through. Returning [] here reads as "you are in no channels", so
+ * one 502 during a reconnect emptied the list, and `voiceStore`, which leaves a
+ * room whose channel has gone, then ended the call. `fetchUserChannels` catches
+ * this and keeps what it has.
+ */
 export const getUserChannels = async (): Promise<Channel[]> => {
-  try {
-    const response = await apiClient.get("/channels/me");
-    return response.data;
-  } catch (error) {
-    console.error(" Failed to fetch user channels", error);
-    return [];
-  }
+  const response = await apiClient.get("/channels/me");
+  return response.data;
 };
 
 export type ChannelParticipantResponse = Record<string, string[]>;

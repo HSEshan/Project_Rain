@@ -14,6 +14,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 
 import websockets
 
@@ -272,6 +273,134 @@ async def main() -> int:
             "declining does not claim a membership change",
             event is not None
             and not (event.get("metadata") or {}).get("channels_changed"),
+            str(event),
+        )
+
+        # 8b. guild changes. Its own guild, because the last step deletes it.
+        # Bob stays in the guild through a rename and a role change, so neither
+        # may claim a membership change; the two deletes do change his.
+        status, roles_guild = call(
+            "POST",
+            "/guilds/",
+            {"name": "Probe roles", "description": "probe"},
+            token=alice["token"],
+        )
+        roles_guild_id = roles_guild["id"]
+        status, roles_invite = call(
+            "POST",
+            f"/guilds/{roles_guild_id}/invite",
+            {"user_id": bob["id"]},
+            token=alice["token"],
+        )
+        await bob_client.wait_for(
+            lambda e: (e.get("metadata") or {}).get("invite_id")
+            == roles_invite["invite_id"]
+        )
+        call(
+            "POST",
+            f"/guilds/{roles_guild_id}/invites/{roles_invite['invite_id']}/accept",
+            token=bob["token"],
+        )
+        event = await alice_client.wait_for(
+            lambda e: (e.get("metadata") or {}).get("action") == "guild_updated"
+            and (e.get("metadata") or {}).get("guild_id") == roles_guild_id
+        )
+        report("a join is delivered to the guild's other members", event is not None)
+        await bob_client.wait_for(
+            lambda e: (e.get("metadata") or {}).get("guild_id") == roles_guild_id
+            and (e.get("metadata") or {}).get("channels_changed")
+        )
+
+        def guild_updated(guild_id):
+            return lambda e: (e.get("metadata") or {}).get(
+                "action"
+            ) == "guild_updated" and (e.get("metadata") or {}).get(
+                "guild_id"
+            ) == guild_id
+
+        call(
+            "PATCH",
+            f"/guilds/{roles_guild_id}",
+            {"name": "Probe renamed"},
+            token=alice["token"],
+        )
+        event = await bob_client.wait_for(guild_updated(roles_guild_id))
+        report("a rename is delivered to members", event is not None)
+        report(
+            "a rename does not claim a membership change",
+            event is not None
+            and not (event.get("metadata") or {}).get("channels_changed"),
+            str(event),
+        )
+
+        call(
+            "PATCH",
+            f"/guilds/{roles_guild_id}/members/{bob['id']}",
+            {"role": "moderator"},
+            token=alice["token"],
+        )
+        event = await bob_client.wait_for(guild_updated(roles_guild_id))
+        report("a role change is delivered to the member", event is not None)
+
+        status, roles_channels = call("GET", "/channels/me", token=bob["token"])
+        doomed = [
+            c for c in roles_channels if c.get("guild_id") == roles_guild_id
+        ][0]
+        call("DELETE", f"/channels/{doomed['id']}", token=alice["token"])
+        event = await bob_client.wait_for(
+            lambda e: (e.get("metadata") or {}).get("channel_id") == doomed["id"]
+        )
+        report(
+            "a deleted channel is delivered as a membership change",
+            event is not None and (event.get("metadata") or {}).get("channels_changed"),
+            str(event),
+        )
+
+        call("DELETE", f"/guilds/{roles_guild_id}", token=alice["token"])
+        event = await bob_client.wait_for(
+            lambda e: (e.get("metadata") or {}).get("guild_id") == roles_guild_id
+            and (e.get("metadata") or {}).get("channels_changed")
+        )
+        report("a deleted guild is delivered to its members", event is not None)
+
+        # 8c. a message changing after it was delivered. Fan-out is by channel,
+        # like the message itself, and a client must not take it for a new one.
+        marker = f"editable {uuid.uuid4().hex}"
+        await alice_ws.send(
+            json.dumps(
+                {"event_type": "message", "receiver_id": dm_channel_id, "text": marker}
+            )
+        )
+        event = await bob_client.wait_for(lambda e: e.get("text") == marker)
+        report("a message to edit is delivered", event is not None)
+        message_id = event["event_id"]
+
+        status, edited = call(
+            "PATCH",
+            f"/messages/{message_id}",
+            {"content": marker + " v2"},
+            token=alice["token"],
+        )
+        event = await bob_client.wait_for(
+            lambda e: (e.get("metadata") or {}).get("action") == "message_edited"
+        )
+        report(
+            "an edit is delivered to the channel",
+            event is not None
+            and event["event_type"] == "message_update"
+            and event["text"] == marker + " v2"
+            and event["metadata"]["message_id"] == message_id
+            and bool(event["metadata"].get("edited_at")),
+            str(event),
+        )
+
+        call("DELETE", f"/messages/{message_id}", token=alice["token"])
+        event = await bob_client.wait_for(
+            lambda e: (e.get("metadata") or {}).get("action") == "message_deleted"
+        )
+        report(
+            "a deletion is delivered to the channel",
+            event is not None and event["metadata"]["message_id"] == message_id,
             str(event),
         )
 

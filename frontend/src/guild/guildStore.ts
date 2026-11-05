@@ -14,6 +14,8 @@ import { EventAction, EventType, type EventPayload } from "../utils/eventType";
 
 export interface GuildStore {
   guilds: Guild[];
+  /** True once `guilds` is an answer, so empty can mean empty. */
+  guildsLoaded: boolean;
   guildChannelIds: Record<string, string[]>;
   members: Record<string, GuildMember[]>; // guildId -> members
   invites: GuildInvite[]; // guild invites waiting for this user
@@ -25,6 +27,10 @@ export interface GuildStore {
   addGuild: (guild: Guild) => void;
   /** Swap in a guild the server just returned, e.g. after an icon change. */
   replaceGuild: (guild: Guild) => void;
+  removeGuild: (guildId: string) => void;
+  /** Swap in a member the server just returned, e.g. after a role change. */
+  setMember: (member: GuildMember) => void;
+  removeMember: (guildId: string, userId: string) => void;
   modalOpen: boolean;
   setModalOpen: (modalOpen: boolean) => void;
   channelModalGuildId: string | null;
@@ -33,6 +39,8 @@ export interface GuildStore {
   setInviteModalGuildId: (guildId: string | null) => void;
   inviteInboxOpen: boolean;
   setInviteInboxOpen: (open: boolean) => void;
+  settingsModalGuildId: string | null;
+  setSettingsModalGuildId: (guildId: string | null) => void;
   fetchUserGuilds: () => Promise<void>;
   fetchGuildMembers: (guildId: string) => Promise<void>;
   fetchInvites: () => Promise<void>;
@@ -44,6 +52,7 @@ export interface GuildStore {
 
 export const useGuildStore = create<GuildStore>((set, get) => ({
   guilds: [],
+  guildsLoaded: false,
   guildChannelIds: {},
   members: {},
   invites: [],
@@ -62,6 +71,28 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
     set((state) => ({
       guilds: state.guilds.map((g) => (g.id === guild.id ? guild : g)),
     })),
+  removeGuild: (guildId) =>
+    set((state) => ({
+      guilds: state.guilds.filter((g) => g.id !== guildId),
+    })),
+  setMember: (member) =>
+    set((state) => ({
+      members: {
+        ...state.members,
+        [member.guild_id]: (state.members[member.guild_id] ?? []).map((m) =>
+          m.user_id === member.user_id ? member : m
+        ),
+      },
+    })),
+  removeMember: (guildId, userId) =>
+    set((state) => ({
+      members: {
+        ...state.members,
+        [guildId]: (state.members[guildId] ?? []).filter(
+          (m) => m.user_id !== userId
+        ),
+      },
+    })),
   modalOpen: false,
   setModalOpen: (modalOpen) => set({ modalOpen }),
   channelModalGuildId: null,
@@ -70,10 +101,12 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
   setInviteModalGuildId: (guildId) => set({ inviteModalGuildId: guildId }),
   inviteInboxOpen: false,
   setInviteInboxOpen: (open) => set({ inviteInboxOpen: open }),
+  settingsModalGuildId: null,
+  setSettingsModalGuildId: (guildId) => set({ settingsModalGuildId: guildId }),
   fetchUserGuilds: async () => {
     try {
       const guilds = await getUserGuilds();
-      set({ guilds });
+      set({ guilds, guildsLoaded: true });
     } catch (error) {
       console.error("Failed to fetch guilds:", error);
     }
@@ -103,8 +136,10 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
   acceptInvite: async (invite) => {
     await postAcceptGuildInvite(invite.guild_id, invite.invite_id);
     // Accepting consumes the invite, so drop it here rather than refetching.
-    // The guild itself arrives via the channels_changed event below.
     get().removeInvite(invite.invite_id);
+    // Not left to the channels_changed event: the caller navigates straight
+    // into the guild, and `GuildLayout` sends away anyone not in it.
+    await get().fetchUserGuilds();
   },
 
   declineInvite: async (invite) => {
@@ -115,6 +150,7 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
   reset: () =>
     set({
       guilds: [],
+      guildsLoaded: false,
       guildChannelIds: {},
       members: {},
       invites: [],
@@ -122,6 +158,7 @@ export const useGuildStore = create<GuildStore>((set, get) => ({
       channelModalGuildId: null,
       inviteModalGuildId: null,
       inviteInboxOpen: false,
+      settingsModalGuildId: null,
     }),
 }));
 
@@ -147,6 +184,17 @@ eventBus.on(EventType.NOTIFICATION, async (event: EventPayload) => {
   if (metadata?.action === EventAction.GUILD_INVITE_REMOVED) {
     if (metadata.invite_id) {
       useGuildStore.getState().removeInvite(metadata.invite_id);
+    }
+    return;
+  }
+
+  // Renamed, or someone's role or membership moved. Yours may be the role, so
+  // both the guild and its member list are re-read.
+  if (metadata?.action === EventAction.GUILD_UPDATED) {
+    if (metadata.guild_id) {
+      const store = useGuildStore.getState();
+      await store.fetchUserGuilds();
+      await store.fetchGuildMembers(metadata.guild_id);
     }
     return;
   }

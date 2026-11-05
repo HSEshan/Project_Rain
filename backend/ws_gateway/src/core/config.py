@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     # batch loop is not draining — almost always a slow or unreachable Postgres
     # — and producers wait rather than growing the process without limit.
     MAX_PENDING_EVENTS: int = 10_000
+    # Off only in the dev compose file, for the e2e suite
+    RATE_LIMIT_ENABLED: bool = True
 
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
