@@ -7,6 +7,7 @@ from libs.event.shards import register_shard_count
 from libs.rediskeys import RediKeys
 from redis.asyncio import Redis
 from redis.exceptions import ResponseError
+from src.assignment import moves, plan_leases
 from src.config import config
 
 logger = structlog.get_logger(__name__)
@@ -93,24 +94,27 @@ class LeaseManager:
             logger.info("No active consumers")
             return
 
-        leases_per_consumer = self.num_shards // len(consumers)
-        remainder = self.num_shards % len(consumers)
+        # Sticky: start from what is there and move only what has to move. See
+        # `src/assignment.py` for why recomputing from scratch was a problem.
+        raw = await self.redis.hgetall(RediKeys.leases())
+        current = {
+            (k.decode() if isinstance(k, bytes) else k): (
+                v.decode() if isinstance(v, bytes) else v
+            )
+            for k, v in raw.items()
+        }
+        shards = [RediKeys.stream_shard(i) for i in range(self.num_shards)]
+        changed = moves(current, plan_leases(current, consumers, shards))
+        if not changed:
+            return
 
-        assignments = {}
-        stream_id = 0
-
-        for consumer in consumers:
-            count = leases_per_consumer + (1 if remainder > 0 else 0)
-            if remainder > 0:
-                remainder -= 1
-
-            for _ in range(count):
-                stream_key = RediKeys.stream_shard(stream_id)
-                assignments[stream_key] = consumer
-                stream_id += 1
-
-        await self.redis.hset(RediKeys.leases(), mapping=assignments)
-        logger.info("Assigned leases to consumers", num_consumers=len(consumers))
+        await self.redis.hset(RediKeys.leases(), mapping=changed)
+        logger.info(
+            "Moved leases",
+            moved={shard: owner for shard, owner in changed.items()},
+            previous={shard: current.get(shard) for shard in changed},
+            num_consumers=len(consumers),
+        )
 
     async def run(self):
         logger.info("Running...")

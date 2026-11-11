@@ -106,6 +106,10 @@ class EventAction(str, Enum):
     # membership change for the recipient, for the same reason as above: what
     # is stale is the guild row and its member list.
     GUILD_UPDATED = "guild_updated"
+    # Someone the recipient shares a channel with changed their avatar.
+    # `metadata.user_id` and `metadata.avatar_url` (null when cleared) are the
+    # whole update, so the client patches one row rather than refetching.
+    USER_UPDATED = "user_updated"
     # This socket is sending too fast. Written straight to it by the gateway and
     # never published, so it does not reach the stream or any other connection.
     RATE_LIMITED = "rate_limited"

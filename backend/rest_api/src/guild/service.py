@@ -636,10 +636,17 @@ class GuildService(BaseService):
                 raise
             guild = await self.get_guild_by_id(guild_id)
             old_key, guild.icon_key = guild.icon_key, key
-        # No realtime event: other members see the new icon on their next
-        # guild fetch, like a renamed bio. The response is how the admin who
-        # changed it finds out, because rest_api does not publish to the actor.
+            members = await self._member_ids(guild_id)
         await delete_quietly([old_key])
+        # The same refetch a rename triggers. The icon URL changes with every
+        # upload (keys are write-once), so a client that re-reads its guilds
+        # cannot be served the old picture from cache.
+        await self._publish_guild_updated(
+            user.id,
+            guild_id,
+            members,
+            "The guild icon changed" if key else "The guild icon was removed",
+        )
         return guild
 
     async def get_guild_members(self, guild_id: str) -> list[GuildMember]:

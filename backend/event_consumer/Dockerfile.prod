@@ -18,4 +18,10 @@ COPY ./event_consumer /app
 # Install event_consumer dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Non-root, with a fixed uid: a volume keeps the owner it was chowned to,
+# so the number must not change between builds. 10001 is clear of any
+# account the base image or the host is likely to have.
+RUN useradd --uid 10001 --create-home appuser
+USER appuser
+
 CMD ["python", "main.py"]

@@ -25,6 +25,11 @@ export enum EventAction {
   GROUP_DM_UPDATED = "group_dm_updated",
   /** A guild you stay in changed name, roster or roles. Same reasoning. */
   GUILD_UPDATED = "guild_updated",
+  /**
+   * Someone you share a channel with changed their avatar. Carries
+   * `user_id` and `avatar_url` (null when cleared), applied as-is.
+   */
+  USER_UPDATED = "user_updated",
   /** This socket is sending too fast. `metadata.retry_after` is in seconds. */
   RATE_LIMITED = "rate_limited",
   MESSAGE_EDITED = "message_edited",
@@ -46,8 +51,8 @@ export type EventPayload = {
   /**
    * Deprecated. A channel id for `message` and `voice_state`, a user id for
    * `notification` and `friend_request`, with nothing here saying which.
-   * `target_type`/`target_id` replace it; the server still sends both, so
-   * nothing has to move until the old field is dropped.
+   * `target_type`/`target_id` replace it; the server still sends both.
+   * Read through `eventTargetId`, never directly.
    */
   receiver_id: string;
   target_type?: TargetType;
@@ -56,3 +61,13 @@ export type EventPayload = {
   metadata?: Record<string, unknown>;
   timestamp: string; // ISO 8601 format
 };
+
+/**
+ * Who or what an event is addressed to: a channel id or a user id, by
+ * `target_type`. Reads `target_id` and falls back to the deprecated
+ * `receiver_id` only for an event from a server older than the expand phase.
+ * Every read goes through here, so the contract phase deletes one line.
+ */
+export const eventTargetId = (event: EventPayload): string =>
+  // `||`, not `??`: an empty string is how proto3 spells "not set"
+  event.target_id || event.receiver_id;

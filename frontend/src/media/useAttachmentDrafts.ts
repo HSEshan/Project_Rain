@@ -18,6 +18,11 @@ export type AttachmentDraft = {
   error?: string;
 };
 
+/** A restored draft previews from its stored URL, which is not ours to revoke. */
+const revokePreview = (url: string) => {
+  if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+};
+
 /**
  * Images waiting to go out with the next message in one composer.
  *
@@ -48,7 +53,7 @@ export function useAttachmentDrafts(channelId: string) {
 
   const clear = useCallback(() => {
     generation.current += 1;
-    draftsRef.current.forEach((draft) => URL.revokeObjectURL(draft.previewUrl));
+    draftsRef.current.forEach((draft) => revokePreview(draft.previewUrl));
     setDrafts([]);
     setNotice("");
   }, []);
@@ -88,16 +93,36 @@ export function useAttachmentDrafts(channelId: string) {
     }
   };
 
+  /**
+   * Put back images that were sent and refused. A rate-limited message is
+   * dropped before the gateway claims anything, so these are still ours and
+   * still unclaimed; their ids are as good as they were a moment ago. Only into
+   * an empty composer: anything picked since is a newer intent than a resend.
+   * The preview is the stored image, since the local object URL was revoked.
+   */
+  const restore = useCallback((sent: Attachment[]) => {
+    if (sent.length === 0 || draftsRef.current.length > 0) return;
+    setDrafts(
+      sent.map((attachment) => ({
+        localId: crypto.randomUUID(),
+        previewUrl: attachment.url,
+        progress: 1,
+        attachment,
+      }))
+    );
+  }, []);
+
   const remove = (localId: string) => {
     const draft = draftsRef.current.find((item) => item.localId === localId);
-    if (draft) URL.revokeObjectURL(draft.previewUrl);
+    if (draft) revokePreview(draft.previewUrl);
     setDrafts((current) => current.filter((item) => item.localId !== localId));
   };
 
   const uploading = drafts.some((draft) => !draft.attachment && !draft.error);
-  const readyIds = drafts
-    .map((draft) => draft.attachment?.id)
-    .filter((id): id is string => !!id);
+  const ready = drafts
+    .map((draft) => draft.attachment)
+    .filter((attachment): attachment is Attachment => !!attachment);
+  const readyIds = ready.map((attachment) => attachment.id);
 
-  return { drafts, notice, add, remove, clear, uploading, readyIds };
+  return { drafts, notice, add, remove, clear, restore, uploading, ready, readyIds };
 }

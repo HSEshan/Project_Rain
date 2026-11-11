@@ -34,6 +34,17 @@ class RediKeys:
         return f"heartbeat:{consumer_id}"
 
     @staticmethod
+    def gateway_heartbeat(grpc_endpoint: str) -> str:
+        """Present while the gateway advertising `grpc_endpoint` is alive.
+
+        Written by the gateway with a short TTL and refreshed, so a gateway that
+        is SIGKILLed or OOM-killed simply stops having one. The consumer reads it
+        only after a delivery to that endpoint has failed, to tell a gateway that
+        is gone from one that is merely slow.
+        """
+        return f"gateway:{grpc_endpoint}:heartbeat"
+
+    @staticmethod
     def event_consumers() -> str:
         return "event_consumers"
 

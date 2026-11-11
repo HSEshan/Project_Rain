@@ -48,6 +48,12 @@ class RedisManager:
             await self.redis.aclose()
         logger.info("Disconnected from Redis")
 
+    async def set_gateway_heartbeat(self, grpc_endpoint: str, ttl: int):
+        await self.redis.set(RediKeys.gateway_heartbeat(grpc_endpoint), "1", ex=ttl)
+
+    async def delete_gateway_heartbeat(self, grpc_endpoint: str):
+        await self.redis.delete(RediKeys.gateway_heartbeat(grpc_endpoint))
+
     async def set_user_grpc_endpoint(
         self, user_id: str, grpc_endpoint: str, ttl: int = settings.DEFAULT_TTL_SECONDS
     ):

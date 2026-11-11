@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FiEdit2, FiImage, FiSend, FiTrash2, FiX } from "react-icons/fi";
-import { type Message } from "../shared/types";
+import { type Attachment, type Message } from "../shared/types";
 import { useWebSocket } from "../utils/WebsocketProvider";
 import { useMessageStore } from "../shared/messageStore";
 import { useChannelStore } from "../shared/channelStore";
@@ -15,18 +15,47 @@ import {
   useGuildStanding,
 } from "../guild/permissions";
 import { eventBus } from "../utils/EventBus";
-import { EventAction, EventType, type EventPayload } from "../utils/eventType";
+import {
+  EventAction,
+  EventType,
+  TargetType,
+  type EventPayload,
+} from "../utils/eventType";
 import { useAuth } from "../auth/AuthContext";
 import { useUserStore } from "../shared/userStore";
 import Avatar from "../shared/Avatar";
 import ViewHeader from "../shared/ViewHeader";
 import ProfileTrigger from "../profile/ProfileTrigger";
 import AttachmentGallery from "../media/AttachmentGallery";
+import EmojiPicker from "./EmojiPicker";
+import { isJumboEmoji } from "./emoji";
 import { useAttachmentDrafts } from "../media/useAttachmentDrafts";
 import {
   ACCEPTED_IMAGE_TYPES,
   MAX_ATTACHMENTS_PER_MESSAGE,
 } from "../media/apiClient";
+
+/** The gateway's MAX_MESSAGE_LENGTH; it drops anything longer. */
+const MAX_DRAFT_LENGTH = 4000;
+
+/**
+ * Put `insert` at the textarea's caret, replacing any selection, and move the
+ * caret after it. Null when the result would exceed the length limit. The
+ * textarea keeps its selection while the emoji picker has focus, so it is still
+ * there to read when a pick arrives.
+ */
+function insertAtCaret(
+  node: HTMLTextAreaElement | null,
+  value: string,
+  insert: string
+): { next: string; place: () => void } | null {
+  const start = node?.selectionStart ?? value.length;
+  const end = node?.selectionEnd ?? value.length;
+  const next = value.slice(0, start) + insert + value.slice(end);
+  if (next.length > MAX_DRAFT_LENGTH) return null;
+  const caret = start + insert.length;
+  return { next, place: () => node?.setSelectionRange(caret, caret) };
+}
 
 /** Messages from the same person within this window share one header. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
@@ -114,6 +143,7 @@ function MessageEditor({
 }) {
   const updateMessage = useMessageStore((state) => state.updateMessage);
   const [text, setText] = useState(message.content);
+  const editorRef = useRef<HTMLTextAreaElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
@@ -136,13 +166,15 @@ function MessageEditor({
   };
 
   return (
-    <div className="mt-0.5">
+    // `relative` so the picker's popover anchors to the editor
+    <div className="relative mt-0.5">
       <textarea
+        ref={editorRef}
         autoFocus
         aria-label="Edit message"
         value={text}
         rows={Math.min(text.split("\n").length, 8)}
-        maxLength={4000}
+        maxLength={MAX_DRAFT_LENGTH}
         disabled={busy}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
@@ -154,13 +186,24 @@ function MessageEditor({
         }}
         className="w-full resize-none rounded-lg border border-white/10 bg-ink-850/80 px-3 py-2 text-[15px] text-white focus:outline-none focus:ring-2 focus:ring-rain-400/60"
       />
-      {error ? (
-        <p className="text-xs text-red-300">{error}</p>
-      ) : (
-        <p className="text-[11px] text-ink-400">
-          Enter to save, Escape to cancel
-        </p>
-      )}
+      <div className="flex items-center gap-2">
+        <EmojiPicker
+          disabled={busy}
+          onPick={(emoji) => {
+            const result = insertAtCaret(editorRef.current, text, emoji);
+            if (!result) return;
+            setText(result.next);
+            requestAnimationFrame(result.place);
+          }}
+        />
+        {error ? (
+          <p className="text-xs text-red-300">{error}</p>
+        ) : (
+          <p className="text-[11px] text-ink-400">
+            Enter to save, Escape to cancel
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -288,7 +331,13 @@ function MessageRow({
           <MessageEditor message={message} onDone={() => setEditing(false)} />
         ) : (
           message.content && (
-            <p className="whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink-200">
+            <p
+              className={`whitespace-pre-wrap break-words text-ink-200 ${
+                isJumboEmoji(message.content)
+                  ? "py-0.5 text-4xl leading-tight"
+                  : "text-[15px] leading-relaxed"
+              }`}
+            >
               {message.content}
               {message.edited_at && (
                 <span
@@ -369,8 +418,17 @@ export function MessageView({
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [draft, setDraft] = useState("");
   const [sendError, setSendError] = useState("");
-  const lastSentRef = useRef("");
+  // What went out last, and where, so a refusal can put it back. The channel is
+  // part of it because this view outlives a channel switch: a refusal for a
+  // message sent elsewhere must not land in this composer, least of all its
+  // images.
+  const lastSentRef = useRef<{
+    channelId: string;
+    text: string;
+    attachments: Attachment[];
+  } | null>(null);
   const attachments = useAttachmentDrafts(channelId);
+  const restoreAttachments = attachments.restore;
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const rows = useMemo(() => buildRows(messages), [messages]);
@@ -425,13 +483,19 @@ export function MessageView({
   useEffect(() => {
     const onNotification = (event: EventPayload) => {
       if (event.metadata?.action !== EventAction.RATE_LIMITED) return;
+      const last = lastSentRef.current;
+      // A refusal for a message sent from another channel is not about this
+      // composer, and an error here would point at the wrong conversation.
+      if (!last || last.channelId !== channelId) return;
       setSendError(event.text);
-      setDraft((current) => current || lastSentRef.current);
+      lastSentRef.current = null;
+      setDraft((current) => current || last.text);
+      restoreAttachments(last.attachments);
       requestAnimationFrame(resizeInput);
     };
     eventBus.on(EventType.NOTIFICATION, onNotification);
     return () => eventBus.off(EventType.NOTIFICATION, onNotification);
-  }, []);
+  }, [channelId, restoreAttachments]);
 
   const sendMessage = () => {
     const text = draft.trim();
@@ -443,7 +507,10 @@ export function MessageView({
     ws.send(
       JSON.stringify({
         event_type: EventType.MESSAGE,
-        receiver_id: channelId,
+        // The gateway only accepts messages to a channel and rebuilds the frame
+        // from `target_id`; `receiver_id` is the deprecated name it still takes.
+        target_type: TargetType.CHANNEL,
+        target_id: channelId,
         text,
         // Only a request: the gateway links each id that is ours and unsent,
         // and tells every recipient (us included) what it actually attached.
@@ -452,11 +519,23 @@ export function MessageView({
         }),
       })
     );
-    lastSentRef.current = text;
+    lastSentRef.current = { channelId, text, attachments: attachments.ready };
     setDraft("");
     setSendError("");
     attachments.clear();
     requestAnimationFrame(resizeInput);
+  };
+
+  // At the caret, not the end: someone fixing a sentence midway wants the emoji
+  // where they were typing.
+  const insertEmoji = (emoji: string) => {
+    const result = insertAtCaret(inputRef.current, draft, emoji);
+    if (!result) return;
+    setDraft(result.next);
+    requestAnimationFrame(() => {
+      result.place();
+      resizeInput();
+    });
   };
 
   // A pasted screenshot is the most common way an image enters a chat, so the
@@ -536,7 +615,8 @@ export function MessageView({
         {attachments.notice && (
           <p className="mb-2 text-xs text-amber-300">{attachments.notice}</p>
         )}
-        <div className="rounded-2xl border border-white/[0.08] bg-ink-850/80 p-2 transition-colors focus-within:border-rain-400/40 focus-within:ring-2 focus-within:ring-rain-400/20">
+        {/* `relative`: the emoji popover anchors to this box, not its button */}
+        <div className="relative rounded-2xl border border-white/[0.08] bg-ink-850/80 p-2 transition-colors focus-within:border-rain-400/40 focus-within:ring-2 focus-within:ring-rain-400/20">
           {attachments.drafts.length > 0 && (
             <ul className="flex flex-wrap gap-2 px-1 pb-2 pt-1">
               {attachments.drafts.map((item) => (
@@ -597,10 +677,11 @@ export function MessageView({
                 e.target.value = "";
               }}
             />
+            <EmojiPicker onPick={insertEmoji} />
             <textarea
               ref={inputRef}
               rows={1}
-              maxLength={4000}
+              maxLength={MAX_DRAFT_LENGTH}
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value);

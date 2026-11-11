@@ -38,10 +38,10 @@ services:
   rest_api:
     build:
       context: ./backend
-      dockerfile: rest_api/Dockerfile
-    # The Dockerfile CMD ends in --reload, which in dev watches a bind mount
-    # that does not exist here.
-    command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+      # Dockerfile.prod, not the dev one: no --reload, and a non-root user
+      # (uid 10001). Its CMD is the one production runs; there is deliberately
+      # no `command:` here, so the flags live in exactly one file.
+      dockerfile: rest_api/Dockerfile.prod
     env_file:
       - ./rest_api.env
     # Uploaded images. Back this volume up with the database: a restored dump
@@ -74,12 +74,9 @@ services:
   ws_gateway:
     build:
       context: ./backend
-      dockerfile: ws_gateway/Dockerfile
-    # This, not the Dockerfile's CMD, is what production runs. --ws-max-size: the
-    # largest honest frame is a 4000 character message, escaped. uvicorn's default
-    # is 16 MB, read and parsed before anything can look at it.
-    command:
-      ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--ws-max-size", "65536"]
+      # Its CMD carries --ws-max-size 65536. That flag once went into a
+      # Dockerfile this file did not build (2026-11-05); now it builds that one.
+      dockerfile: ws_gateway/Dockerfile.prod
     env_file:
       - ./ws_gateway.env
     environment:
@@ -110,7 +107,7 @@ services:
   event_consumer:
     build:
       context: ./backend
-      dockerfile: event_consumer/Dockerfile
+      dockerfile: event_consumer/Dockerfile.prod
     env_file:
       - ./event_consumer.env
     environment:
@@ -125,7 +122,7 @@ services:
   lease_manager:
     build:
       context: ./backend
-      dockerfile: lease_manager/Dockerfile
+      dockerfile: lease_manager/Dockerfile.prod
     # Its Config reads REDIS_* and NUM_STREAMS with no defaults and raises on
     # a missing one, so this file is required, not optional.
     env_file:

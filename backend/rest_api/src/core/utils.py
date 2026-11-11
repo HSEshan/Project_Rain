@@ -35,6 +35,10 @@ async def startup_event():
 
     await run_migrations(engine)
 
+    from src.media.storage import check_media_writable
+
+    await asyncio.to_thread(check_media_writable)
+
     # Best effort: a missing Redis degrades realtime updates, it does not stop
     # the API from serving
     await realtime_publisher.connect()

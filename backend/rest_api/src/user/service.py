@@ -16,6 +16,8 @@ from src.database.service import BaseService
 from src.media.images import ImageKind
 from src.media.service import store_image
 from src.media.storage import delete_quietly
+from src.realtime import events
+from src.realtime.publisher import realtime_publisher
 from src.user.repository import UserRepository
 from src.user.schemas import (
     BulkUserRequest,
@@ -105,18 +107,50 @@ class UserService(BaseService):
         reused, so an old avatar nobody references is only storage cost.
         """
         key, _ = await store_image(upload, ImageKind.AVATAR, f"avatars/{user_id}")
+        return await self._swap_avatar(user_id, key)
+
+    async def clear_avatar(self, user_id: str) -> UserProfile:
+        return await self._swap_avatar(user_id, None)
+
+    async def _swap_avatar(self, user_id: str, key: str | None) -> UserProfile:
         async with self.db.begin():
             user = await UserRepository.get_user_by_id(self.db, user_id)
             old_key, user.avatar_key = user.avatar_key, key
+            avatar_url = user.avatar_url
+        # Read after the commit rather than inside the transaction that holds
+        # the user row: the scan can be large, and the publish is after the
+        # commit anyway, so there is no consistency to gain by holding the lock.
+        audience = await self._people_who_see(user_id)
         await delete_quietly([old_key])
+        # After the commit, like every publish in rest_api. The audience is
+        # everyone who shares a channel with this person, which covers friends
+        # (accepting a request creates the DM) and fellow guild members, and
+        # includes the person themselves for their other tabs.
+        await realtime_publisher.publish_many(
+            events.user_updated(
+                actor_id=user_id, to_user_id=member_id, avatar_url=avatar_url
+            )
+            for member_id in audience
+        )
         return await self.get_profile(user_id, user_id)
 
-    async def clear_avatar(self, user_id: str) -> UserProfile:
-        async with self.db.begin():
-            user = await UserRepository.get_user_by_id(self.db, user_id)
-            old_key, user.avatar_key = user.avatar_key, None
-        await delete_quietly([old_key])
-        return await self.get_profile(user_id, user_id)
+    async def _people_who_see(self, user_id: str) -> list[str]:
+        """Everyone in at least one channel with this user, them included.
+
+        One row per person however
+        many channels they share, so a busy guild costs one event each.
+        """
+        shared = select(ChannelMember.channel_id).where(
+            ChannelMember.user_id == user_id
+        )
+        result = await self.db.execute(
+            select(ChannelMember.user_id)
+            .where(ChannelMember.channel_id.in_(shared))
+            .distinct()
+        )
+        people = {str(member_id) for member_id in result.scalars()}
+        people.add(str(user_id))
+        return sorted(people)
 
     async def _friend_state(self, viewer_id: str, user_id: str) -> FriendState:
         if viewer_id == user_id:

@@ -7,7 +7,7 @@ import {
 import type { User } from "../shared/userStore";
 import { eventBus } from "../utils/EventBus";
 import { onResync } from "../shared/resync";
-import { EventType, type EventPayload } from "../utils/eventType";
+import { EventType, eventTargetId, type EventPayload } from "../utils/eventType";
 import { useUserStore } from "../shared/userStore";
 
 export interface FriendRequest {
@@ -95,7 +95,7 @@ eventBus.on(EventType.FRIEND_REQUEST, (event: EventPayload) => {
   useFriendStore.getState().addFriendRequest({
     id: metadata.request_id,
     from_user_id: event.sender_id,
-    to_user_id: event.receiver_id,
+    to_user_id: eventTargetId(event),
     created_at: event.timestamp,
   });
 

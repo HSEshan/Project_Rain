@@ -31,6 +31,9 @@ class WebsocketManager:
         # and evicting one while a coroutine waits on it would hand the next
         # caller a second, unrelated lock.
         self._locks: dict[str, asyncio.Lock] = {}
+        # Token expiry per connected user, so a re-asserted user route gets the
+        # same TTL registration gave it
+        self._expires: dict[str, int] = {}
         self.grpc_endpoint: str | None = None
         self.redis_manager: RedisManager | None = None
         self.user_mapping: UserMapping = UserMapping()
@@ -64,11 +67,10 @@ class WebsocketManager:
     async def _register(self, current_user: CurrentUser, websocket: WebSocket):
         sockets = self.clients.setdefault(current_user.id, set())
         sockets.add(websocket)
+        self._expires[current_user.id] = current_user.exp
 
-        expiration = datetime.fromtimestamp(current_user.exp, tz=timezone.utc)
-        ttl_seconds = int((expiration - datetime.now(timezone.utc)).total_seconds())
         await self.redis_manager.set_user_grpc_endpoint(
-            current_user.id, self.grpc_endpoint, ttl_seconds
+            current_user.id, self.grpc_endpoint, _ttl_until(current_user.exp)
         )
 
         channel_ids = await self.redis_manager.get_user_channel_ids(current_user.id)
@@ -151,6 +153,7 @@ class WebsocketManager:
             return
 
         del self.clients[client_id]
+        self._expires.pop(client_id, None)
         empty_channel_ids = self.user_mapping.remove_user_from_channels(client_id)
         for channel_id in empty_channel_ids:
             await self.redis_manager.remove_grpc_endpoint_from_channel(
@@ -159,11 +162,40 @@ class WebsocketManager:
         await self.redis_manager.delete_user_grpc_endpoint(client_id)
         logger.info(f"Client {client_id} disconnected")
 
+    async def reassert_routes(self):
+        """Write this gateway's routes again, for every user it holds.
+
+        Routes are otherwise written only on connect and on a membership refresh,
+        so anything that removed one behind the gateway's back (the consumer
+        pruning an endpoint it believed dead, a Redis restart that lost keys)
+        would leave a connected user silently unreachable until they reconnect.
+        Run periodically from the heartbeat. Under each user's lock, so it cannot
+        put back a route that a concurrent teardown is removing.
+        """
+        for user_id in list(self.clients):
+            async with self._lock(user_id):
+                if user_id not in self.clients:
+                    continue
+                ttl = _ttl_until(self._expires.get(user_id, 0))
+                if ttl > 0:
+                    await self.redis_manager.set_user_grpc_endpoint(
+                        user_id, self.grpc_endpoint, ttl
+                    )
+                for channel_id in list(self.user_mapping.get_user_channel_ids(user_id)):
+                    await self.redis_manager.add_grpc_endpoint_to_channel(
+                        channel_id, self.grpc_endpoint
+                    )
+
     def get_client_sockets(self, client_id: str) -> list[WebSocket]:
         """
         Every socket this client holds on this instance; empty if none.
         """
         return list(self.clients.get(client_id, ()))
+
+
+def _ttl_until(exp: int) -> int:
+    expiration = datetime.fromtimestamp(exp, tz=timezone.utc)
+    return int((expiration - datetime.now(timezone.utc)).total_seconds())
 
 
 websocket_manager = WebsocketManager()

@@ -46,6 +46,45 @@ def call(method, path, body=None, token=None):
         return e.code, body
 
 
+def tiny_png(width=16, height=16) -> bytes:
+    """A valid PNG from the stdlib alone; this container has no Pillow."""
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return (
+            struct.pack(">I", len(data))
+            + kind
+            + data
+            + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+        )
+
+    rows = b"".join(b"\x00" + b"\x20\x90\xd0" * width for _ in range(height))
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(rows))
+        + chunk(b"IEND", b"")
+    )
+
+
+def upload(path, token):
+    """PUT a tiny PNG as the multipart `file` field. Returns (status, body)."""
+    boundary = uuid.uuid4().hex
+    body = (
+        f"--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; "
+        f"filename=\"probe.png\"\r\nContent-Type: image/png\r\n\r\n"
+    ).encode() + tiny_png() + f"\r\n--{boundary}--\r\n".encode()
+    req = urllib.request.Request(REST + path, data=body, method="PUT")
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return resp.status, json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode()
+
+
 def report(name, ok, detail=""):
     print(f"  {'PASS' if ok else 'FAIL'}  {name}{'' if ok else f' {detail}'}")
     if not ok:
@@ -126,6 +165,36 @@ async def main() -> int:
             "acceptance carries the new dm channel",
             dm_channel_id == accepted.get("dm_channel_id"),
             f"{dm_channel_id} != {accepted}",
+        )
+
+        # 2b. an avatar change reaches everyone who shares a channel, and only them.
+        # Carol shares nothing with alice yet; she is the negative case.
+        def avatar_event(url):
+            return lambda e: (e.get("metadata") or {}).get(
+                "action"
+            ) == "user_updated" and (e.get("metadata") or {}).get(
+                "user_id"
+            ) == alice["id"] and (e.get("metadata") or {}).get("avatar_url") == url
+
+        status, profile = upload("/users/me/avatar", alice["token"])
+        new_url = profile.get("avatar_url") if isinstance(profile, dict) else None
+        report("avatar upload for the realtime check", status == 200 and bool(new_url), str(profile))
+        report(
+            "an avatar change reaches a friend with its new url",
+            await bob_client.wait_for(avatar_event(new_url)) is not None,
+        )
+        report(
+            "an avatar change reaches the actor's own sockets",
+            await alice_client.wait_for(avatar_event(new_url)) is not None,
+        )
+        report(
+            "an avatar change does not reach a stranger",
+            await carol_client.wait_for(action_is("user_updated"), timeout=1.5) is None,
+        )
+        call("DELETE", "/users/me/avatar", token=alice["token"])
+        report(
+            "clearing an avatar is delivered as a null url",
+            await bob_client.wait_for(avatar_event(None)) is not None,
         )
 
         # 3. the DM works immediately, without either client reconnecting.
@@ -341,6 +410,16 @@ async def main() -> int:
         )
         event = await bob_client.wait_for(guild_updated(roles_guild_id))
         report("a role change is delivered to the member", event is not None)
+
+        status, _ = upload(f"/guilds/{roles_guild_id}/icon", alice["token"])
+        event = await bob_client.wait_for(
+            lambda e: guild_updated(roles_guild_id)(e) and "icon" in e.get("text", "")
+        )
+        report(
+            "a new guild icon is delivered to members",
+            status == 200 and event is not None,
+            f"{status} {event}",
+        )
 
         status, roles_channels = call("GET", "/channels/me", token=bob["token"])
         doomed = [

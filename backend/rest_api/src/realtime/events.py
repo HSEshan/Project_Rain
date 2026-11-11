@@ -188,6 +188,32 @@ def guild_updated(
     )
 
 
+def user_updated(
+    *,
+    actor_id: str,
+    to_user_id: str,
+    avatar_url: str | None,
+) -> Event:
+    """Someone the recipient can see changed their avatar.
+
+    Carries the new URL rather than asking for a refetch: the client's user
+    cache only ever fetches ids it has not seen, so without the value in hand
+    an old avatar would stay on screen until a reload. Goes to the actor too,
+    for their other tabs.
+    """
+    return Event(
+        event_type=EventType.NOTIFICATION,
+        sender_id=str(actor_id),
+        receiver_id=str(to_user_id),
+        text="",
+        metadata={
+            "action": EventAction.USER_UPDATED.value,
+            "user_id": str(actor_id),
+            "avatar_url": avatar_url,
+        },
+    )
+
+
 def message_edited(
     *, actor_id: str, channel_id: str, message_id: str, text: str, edited_at: str
 ) -> Event:

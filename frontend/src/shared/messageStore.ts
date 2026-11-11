@@ -3,7 +3,12 @@ import type { Attachment, Message } from "./types";
 import { getChannelMessages } from "./messageApiClient";
 import { eventBus } from "../utils/EventBus";
 import { onResync } from "./resync";
-import { EventAction, EventType, type EventPayload } from "../utils/eventType";
+import {
+  EventAction,
+  EventType,
+  eventTargetId,
+  type EventPayload,
+} from "../utils/eventType";
 
 interface MessageStore {
   messages: Record<string, Message>; // messageId -> Message object
@@ -152,7 +157,7 @@ eventBus.on(EventType.MESSAGE, (event: EventPayload) => {
     id: event.event_id,
     content: event.text,
     sender_id: event.sender_id,
-    channel_id: event.receiver_id,
+    channel_id: eventTargetId(event),
     created_at: event.timestamp,
     attachments: metadata?.attachments ?? [],
   });

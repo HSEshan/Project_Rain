@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { getUserProfile, type UserProfile } from "./apiClient";
 import { errorText } from "../shared/errors";
+import { eventBus } from "../utils/EventBus";
+import { EventAction, EventType, type EventPayload } from "../utils/eventType";
 
 /**
  * Which profile card is open, and what is in it.
@@ -69,3 +71,17 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
 
   close: () => set({ userId: null, profile: null, loading: false, error: "" }),
 }));
+
+// A card held open while its owner changes their picture would otherwise keep
+// the old one, the one place `Avatar` is handed a URL rather than looking it up.
+eventBus.on(EventType.NOTIFICATION, (event: EventPayload) => {
+  const metadata = event.metadata as
+    | { action?: string; user_id?: string; avatar_url?: string | null }
+    | undefined;
+  if (metadata?.action !== EventAction.USER_UPDATED) return;
+  const { profile } = useProfileStore.getState();
+  if (!profile || profile.id !== metadata.user_id) return;
+  useProfileStore.setState({
+    profile: { ...profile, avatar_url: metadata.avatar_url ?? null },
+  });
+});

@@ -48,6 +48,7 @@ jobs:
           pip install "./backend/libs[db]"
           pip install -r backend/rest_api/requirements.txt
           pip install -r backend/event_consumer/requirements.txt
+          pip install -r backend/ws_gateway/requirements.txt
 
       - name: libs tests
         run: python -m unittest discover -s backend/libs/tests -v
@@ -63,8 +64,13 @@ jobs:
           python -m pytest tests -q
 
       - name: ws_gateway tests
-        # What a client frame may become. No database, no Redis, no env file.
+        # Ingest rules, the per-user routing lock, and the batch accumulator. No
+        # database and no Redis (fakes stand in), but src.core.config reads the
+        # env at import time, so the dev env file is sourced like rest_api's.
         run: |
+          set -a
+          . ./ws_gateway.dev.env
+          set +a
           cd backend/ws_gateway
           python -m unittest discover -s tests -v
 
@@ -75,6 +81,12 @@ jobs:
           . ./event_consumer.dev.env
           set +a
           cd backend/event_consumer
+          python -m unittest discover -s tests -v
+
+      - name: lease_manager tests
+        # Lease assignment is a pure function: no env file, no Redis.
+        run: |
+          cd backend/lease_manager
           python -m unittest discover -s tests -v
 
   frontend:

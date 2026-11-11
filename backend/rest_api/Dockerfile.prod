@@ -20,8 +20,10 @@ COPY ./rest_api/requirements.txt /app/requirements.txt
 # Install requirements (pinned versions recommended)
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Non-root user for safety
-RUN useradd -m appuser
+# Non-root, with a fixed uid: a volume keeps the owner it was chowned to,
+# so the number must not change between builds. 10001 is clear of any
+# account the base image or the host is likely to have.
+RUN useradd --uid 10001 --create-home appuser
 # Created here so the media volume starts out owned by appuser: a new named volume
 # copies its ownership from the image, and without this it is root's and every
 # upload fails. Dev runs as root, so only production can show this.

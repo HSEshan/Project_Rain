@@ -1,11 +1,9 @@
-import {
+import type {
+  Participant,
+  RemoteParticipant,
+  RemoteTrack,
+  RemoteTrackPublication,
   Room,
-  RoomEvent,
-  Track,
-  type Participant,
-  type RemoteParticipant,
-  type RemoteTrack,
-  type RemoteTrackPublication,
 } from "livekit-client";
 import { create } from "zustand";
 import { eventBus } from "../utils/EventBus";
@@ -74,6 +72,36 @@ type VoiceStore = {
   setUserVolume: (userId: string, volume: number) => void;
   reset: () => void;
 };
+
+/**
+ * `livekit-client` is loaded on first join, not at startup.
+ *
+ * It is most of the bundle (the main chunk was 951 kB with it, 272 kB gzip),
+ * and every guild route pulled it in through this store, so everyone paid for
+ * it on page load whether or not they ever joined a call. Only types are
+ * imported statically; `import type` is erased, so nothing here reaches the
+ * main chunk. The promise is cached, and a failed load clears it so the next
+ * join can try again rather than inheriting the rejection forever.
+ */
+type LiveKit = typeof import("livekit-client");
+let livekitModule: LiveKit | null = null;
+let livekitLoading: Promise<LiveKit> | null = null;
+
+function loadLivekit(): Promise<LiveKit> {
+  if (!livekitLoading) {
+    livekitLoading = import("livekit-client").then(
+      (module) => {
+        livekitModule = module;
+        return module;
+      },
+      (error: unknown) => {
+        livekitLoading = null;
+        throw error;
+      }
+    );
+  }
+  return livekitLoading;
+}
 
 /**
  * Remote audio elements, kept out of React so nothing can unmount them.
@@ -171,7 +199,8 @@ function attachTrack(
   publication: RemoteTrackPublication,
   participant: RemoteParticipant
 ) {
-  if (track.kind !== Track.Kind.Audio) return;
+  // Only reachable from a Room, which only exists once the module has loaded
+  if (!livekitModule || track.kind !== livekitModule.Track.Kind.Audio) return;
   const element = track.attach() as HTMLAudioElement;
   element.autoplay = true;
   element.muted = useVoiceStore.getState().deafened;
@@ -289,7 +318,12 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
 
     set({ connecting: true, error: null });
     try {
-      const session = await joinVoiceChannel(channelId);
+      // Fetched alongside the token rather than after it, so the first join
+      // costs one round trip of latency rather than two.
+      const [session, { Room, RoomEvent }] = await Promise.all([
+        joinVoiceChannel(channelId),
+        loadLivekit(),
+      ]);
 
       // Apply the snapshot *before* connecting, not after. Our own arrival
       // comes back as a VOICE_STATE event while `connect` is still running,

@@ -130,6 +130,36 @@ def get_storage() -> Storage:
     raise RuntimeError(f"Unknown STORAGE_BACKEND: {settings.STORAGE_BACKEND}")
 
 
+def check_media_writable() -> bool:
+    """Log an error at startup if the local media root cannot be written.
+
+    rest_api runs as a non-root user in production, and a named volume keeps the
+    ownership it was created with. A volume first made by a root container stays
+    root's, and every upload then fails with a 500 that names nothing useful.
+    This turns that into one line at boot that says what to run. It does not
+    stop startup: an API that cannot store images should still serve messages.
+    """
+    if settings.STORAGE_BACKEND.lower() != "local":
+        return True
+    root = Path(settings.MEDIA_ROOT)
+    try:
+        root.mkdir(parents=True, exist_ok=True)
+        fd, probe = tempfile.mkstemp(dir=root, prefix=".write-check-")
+        os.close(fd)
+        os.unlink(probe)
+        return True
+    except OSError as error:
+        logger.error(
+            "Media root is not writable, every upload will fail. If the volume "
+            "predates the non-root image, chown it to the image user once "
+            "(DEPLOY.md, non-root containers)",
+            media_root=str(root),
+            uid=os.getuid() if hasattr(os, "getuid") else None,
+            error=str(error),
+        )
+        return False
+
+
 async def delete_quietly(keys: list[str | None]) -> None:
     """Delete objects after a commit, logging rather than raising.
 
