@@ -4,6 +4,7 @@ import {
   FiMic,
   FiMicOff,
   FiPhoneOff,
+  FiVideo,
   FiVolume2,
   FiVolumeX,
 } from "react-icons/fi";
@@ -36,6 +37,8 @@ export default function CallDock() {
     activeChannelId,
     muted,
     deafened,
+    cameraOn,
+    toggleCamera,
     speaking,
     error,
     toggleMute,
@@ -153,6 +156,19 @@ export default function CallDock() {
           >
             {deafened ? <FiVolumeX size={15} /> : <FiVolume2 size={15} />}
           </button>
+          {/* Only while it is on. You cannot see yourself from here, so this is
+              not where a camera is turned on; it is how you notice one is still
+              live on another page and switch it off. */}
+          {cameraOn && (
+            <button
+              onClick={() => void toggleCamera()}
+              title="Your camera is on. Turn it off"
+              aria-label="Turn camera off"
+              className={`${circle} bg-white text-ink-950 hover:bg-ink-100`}
+            >
+              <FiVideo size={15} />
+            </button>
+          )}
           <VolumeControl compact />
           <button
             onClick={() => void leave()}

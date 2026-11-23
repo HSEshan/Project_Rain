@@ -44,9 +44,10 @@ def create_join_token(
             "canSubscribe": True,
             "canPublish": True,
             "canPublishData": True,
-            # v1 is audio only. Restricting the sources server-side means a
-            # modified client cannot start a camera or a screen share.
-            "canPublishSources": ["microphone"],
+            # Microphone and camera. Screen share is deliberately not here yet:
+            # restricting sources server-side is what stops a modified client
+            # publishing one, so adding it is a decision, not a UI change.
+            "canPublishSources": ["microphone", "camera"],
         },
     }
     return jwt.encode(claims=claims, key=api_secret, algorithm="HS256")

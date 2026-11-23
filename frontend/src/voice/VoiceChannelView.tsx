@@ -3,6 +3,8 @@ import {
   FiMic,
   FiMicOff,
   FiPhoneOff,
+  FiVideo,
+  FiVideoOff,
   FiVolume2,
   FiVolumeX,
 } from "react-icons/fi";
@@ -12,6 +14,7 @@ import type { Channel } from "../shared/types";
 import Avatar from "../shared/Avatar";
 import { Button } from "../shared/Button";
 import ViewHeader from "../shared/ViewHeader";
+import { VideoTile } from "./VideoView";
 import VolumeControl from "./VolumeControl";
 import { useVoiceStore } from "./voiceStore";
 
@@ -29,7 +32,22 @@ function ParticipantTile({
   // or stops talking and not when anyone else does, which is what keeps a
   // roster of ten people from re-rendering ten times a second.
   const speaking = useVoiceStore((state) => state.speaking[userId] ?? false);
+  const video = useVoiceStore((state) => state.videos[userId]);
   const name = user?.username ?? "…";
+
+  // Camera on: the same place in the roster, wider, with video where the
+  // avatar was. Nothing else about the person changes.
+  if (video) {
+    return (
+      <VideoTile
+        userId={userId}
+        track={video}
+        isSelf={isSelf}
+        muted={isSelf && muted}
+        className="w-full max-w-sm sm:w-80"
+      />
+    );
+  }
 
   return (
     <div className="flex w-32 flex-col items-center gap-3 rounded-2xl border border-white/[0.07] bg-white/[0.02] px-3 py-5 transition-colors hover:border-white/[0.12] sm:w-36">
@@ -56,14 +74,18 @@ function ParticipantTile({
 function ControlBar({
   muted,
   deafened,
+  cameraOn,
   onMute,
   onDeafen,
+  onCamera,
   onLeave,
 }: {
   muted: boolean;
   deafened: boolean;
+  cameraOn: boolean;
   onMute: () => void;
   onDeafen: () => void;
+  onCamera: () => void;
   onLeave: () => void;
 }) {
   const circle =
@@ -95,6 +117,18 @@ function ControlBar({
       >
         {deafened ? <FiVolumeX size={17} /> : <FiVolume2 size={17} />}
       </button>
+      <button
+        onClick={onCamera}
+        title={cameraOn ? "Turn camera off" : "Turn camera on"}
+        aria-label={cameraOn ? "Turn camera off" : "Turn camera on"}
+        className={`${circle} ${
+          cameraOn
+            ? "bg-white text-ink-950 hover:bg-ink-100"
+            : "bg-white/[0.08] text-ink-100 hover:bg-white/[0.14]"
+        }`}
+      >
+        {cameraOn ? <FiVideo size={17} /> : <FiVideoOff size={17} />}
+      </button>
       <VolumeControl />
       <button
         onClick={onLeave}
@@ -121,10 +155,12 @@ export default function VoiceChannelView({
     error,
     muted,
     deafened,
+    cameraOn,
     join,
     leave,
     toggleMute,
     toggleDeafen,
+    toggleCamera,
     fetchRoster,
     getRoster,
   } = useVoiceStore();
@@ -202,8 +238,10 @@ export default function VoiceChannelView({
             <ControlBar
               muted={muted}
               deafened={deafened}
+              cameraOn={cameraOn}
               onMute={() => void toggleMute()}
               onDeafen={() => void toggleDeafen()}
+              onCamera={() => void toggleCamera()}
               onLeave={() => void leave()}
             />
           ) : (

@@ -4,6 +4,8 @@ import {
   FiMicOff,
   FiPhone,
   FiPhoneOff,
+  FiVideo,
+  FiVideoOff,
   FiVolume2,
   FiVolumeX,
 } from "react-icons/fi";
@@ -11,6 +13,7 @@ import { useAuth } from "../auth/AuthContext";
 import Avatar from "../shared/Avatar";
 import { Button } from "../shared/Button";
 import { useUserStore } from "../shared/userStore";
+import { VideoTile } from "./VideoView";
 import VolumeControl from "./VolumeControl";
 import { useVoiceStore } from "./voiceStore";
 
@@ -111,16 +114,52 @@ export function CallButton({ channelId }: { channelId: string }) {
 /** The strip above the composer. Nothing at all when there is no call. */
 export default function CallBar({ channelId }: { channelId: string }) {
   const { roster, others, inThisCall, names, getUser } = useCallState(channelId);
-  const { leave, toggleMute, toggleDeafen, muted, deafened, error, speaking } =
-    useVoiceStore();
+  const {
+    leave,
+    toggleMute,
+    toggleDeafen,
+    toggleCamera,
+    muted,
+    deafened,
+    cameraOn,
+    videos,
+    error,
+    speaking,
+  } = useVoiceStore();
+  const { getCurrentUser } = useAuth();
+  const selfId = getCurrentUser()?.id;
 
   if (!inThisCall && roster.length === 0) return null;
 
   const circle =
     "flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200";
 
+  // Cameras that are on, in roster order. Only ever populated while we are in
+  // the call: video comes from the room, and outside it there is none to show.
+  const onCamera = roster.filter((userId) => videos[userId]);
+
   return (
     <div className="shrink-0 px-3 pt-2 sm:px-6">
+      {/* A DM call has no view of its own, so video gets a stage above the
+          strip, capped in height so the conversation stays readable under it. */}
+      {inThisCall && onCamera.length > 0 && (
+        <div
+          className={`mb-2 grid max-h-[45dvh] gap-2 overflow-y-auto ${
+            onCamera.length === 1 ? "grid-cols-1 justify-items-center" : "grid-cols-2"
+          }`}
+        >
+          {onCamera.map((userId) => (
+            <VideoTile
+              key={userId}
+              userId={userId}
+              track={videos[userId]}
+              isSelf={userId === selfId}
+              muted={userId === selfId && muted}
+              className={onCamera.length === 1 ? "w-full max-w-xl" : "w-full"}
+            />
+          ))}
+        </div>
+      )}
       <div
         className={`flex flex-wrap items-center gap-3 rounded-2xl border px-3 py-2.5 ${
           inThisCall
@@ -178,6 +217,18 @@ export default function CallBar({ channelId }: { channelId: string }) {
               }`}
             >
               {deafened ? <FiVolumeX size={15} /> : <FiVolume2 size={15} />}
+            </button>
+            <button
+              onClick={() => void toggleCamera()}
+              title={cameraOn ? "Turn camera off" : "Turn camera on"}
+              aria-label={cameraOn ? "Turn camera off" : "Turn camera on"}
+              className={`${circle} ${
+                cameraOn
+                  ? "bg-white text-ink-950 hover:bg-ink-100"
+                  : "bg-white/[0.08] text-ink-100 hover:bg-white/[0.14]"
+              }`}
+            >
+              {cameraOn ? <FiVideo size={15} /> : <FiVideoOff size={15} />}
             </button>
             <VolumeControl compact />
             <button

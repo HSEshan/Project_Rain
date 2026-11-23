@@ -4,6 +4,8 @@ import type {
   RemoteTrack,
   RemoteTrackPublication,
   Room,
+  TrackPublication,
+  VideoTrack,
 } from "livekit-client";
 import { create } from "zustand";
 import { eventBus } from "../utils/EventBus";
@@ -59,6 +61,15 @@ type VoiceStore = {
   outputVolume: number;
   /** Per-person trim, 0 to 1, remembered across sessions. */
   userVolumes: Record<string, number>;
+  /** Whether we are publishing our camera. */
+  cameraOn: boolean;
+  /**
+   * Camera video by user id, for everyone in the room whose camera is on right
+   * now, ourselves included. A tile renders video when its user has an entry
+   * and an avatar when they do not, so this is the whole contract between the
+   * room and the UI. Only ever the room we are in, like `speaking`.
+   */
+  videos: Record<string, VideoTrack>;
   /** Not in React state: mutating a Room does not re-render anything. */
   room: Room | null;
 
@@ -68,6 +79,7 @@ type VoiceStore = {
   leave: () => Promise<void>;
   toggleMute: () => Promise<void>;
   toggleDeafen: () => Promise<void>;
+  toggleCamera: () => Promise<void>;
   setOutputVolume: (volume: number) => void;
   setUserVolume: (userId: string, volume: number) => void;
   reset: () => void;
@@ -194,13 +206,38 @@ function audibleUserIds(): string[] {
   return [...new Set([...audioElements.values()].map((entry) => entry.userId))];
 }
 
+function setVideo(userId: string, track: VideoTrack | null) {
+  useVoiceStore.setState((state) => {
+    if (track ? state.videos[userId] === track : !state.videos[userId]) return state;
+    const videos = { ...state.videos };
+    if (track) videos[userId] = track;
+    else delete videos[userId];
+    return { videos };
+  });
+}
+
+/** The camera, as opposed to a microphone or (later) a screen share. */
+function isCamera(publication: TrackPublication): boolean {
+  return publication.source === livekitModule?.Track.Source.Camera;
+}
+
 function attachTrack(
   track: RemoteTrack,
   publication: RemoteTrackPublication,
   participant: RemoteParticipant
 ) {
   // Only reachable from a Room, which only exists once the module has loaded
-  if (!livekitModule || track.kind !== livekitModule.Track.Kind.Audio) return;
+  if (!livekitModule) return;
+  // Video is not attached here: a tile attaches it to its own <video> element,
+  // which is what lets adaptive streaming see how big it is drawn and ask the
+  // SFU for a matching layer. A muted camera arrives subscribed but dark.
+  if (track.kind === livekitModule.Track.Kind.Video) {
+    if (isCamera(publication) && !publication.isMuted) {
+      setVideo(participant.identity, track as VideoTrack);
+    }
+    return;
+  }
+  if (track.kind !== livekitModule.Track.Kind.Audio) return;
   const element = track.attach() as HTMLAudioElement;
   element.autoplay = true;
   element.muted = useVoiceStore.getState().deafened;
@@ -217,7 +254,15 @@ function attachTrack(
   useVoiceStore.setState({ audible: audibleUserIds() });
 }
 
-function detachTrack(track: RemoteTrack, publication: RemoteTrackPublication) {
+function detachTrack(
+  track: RemoteTrack,
+  publication: RemoteTrackPublication,
+  participant: RemoteParticipant
+) {
+  if (track.kind === livekitModule?.Track.Kind.Video) {
+    if (isCamera(publication)) setVideo(participant.identity, null);
+    return;
+  }
   track.detach().forEach((element) => element.remove());
   audioElements.delete(publication.trackSid);
   useVoiceStore.setState({ audible: audibleUserIds() });
@@ -286,6 +331,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
   mutedBeforeDeafen: null,
   speaking: {},
   audible: [],
+  cameraOn: false,
+  videos: {},
   outputVolume: readStoredOutputVolume(),
   userVolumes: readStoredUserVolumes(),
   room: null,
@@ -334,7 +381,15 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
         rosters: { ...state.rosters, [channelId]: session.participants },
       }));
 
-      const room = new Room({ adaptiveStream: false, dynacast: false });
+      // Both only affect video. Adaptive streaming subscribes each video at the
+      // size its tile is drawn and pauses one nobody is looking at (a call
+      // carried on in CallDock from another page); dynacast stops a publisher
+      // sending a simulcast layer no subscriber wants. On one small VPS, SFU
+      // bandwidth is the cost of video, and these are what keep it down.
+      const room = new Room({ adaptiveStream: true, dynacast: true });
+      // Cleared before connecting, not after: remote cameras are subscribed
+      // while `connect` runs, and clearing afterwards would drop them.
+      set({ videos: {}, cameraOn: false });
 
       room
         .on(RoomEvent.TrackSubscribed, attachTrack)
@@ -365,6 +420,19 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
           }
           set({ speaking: next });
         })
+        // A camera turned off is muted, not unpublished, so these, not
+        // subscribe/unsubscribe, are what a remote camera going dark looks like.
+        // They fire for our own camera too.
+        .on(RoomEvent.TrackMuted, (publication, participant) => {
+          if (get().room !== room || !isCamera(publication)) return;
+          setVideo(participant.identity, null);
+        })
+        .on(RoomEvent.TrackUnmuted, (publication, participant) => {
+          if (get().room !== room || !isCamera(publication) || !publication.track) {
+            return;
+          }
+          setVideo(participant.identity, publication.track as VideoTrack);
+        })
         .on(RoomEvent.Disconnected, () => {
           // Server-side kick, network loss, or our own leave() — either way the
           // session is over and the UI must stop claiming we are connected.
@@ -381,6 +449,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
             connecting: false,
             speaking: {},
             audible: [],
+            cameraOn: false,
+            videos: {},
           });
         });
 
@@ -420,6 +490,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
         connecting: false,
         activeChannelId: null,
         room: null,
+        cameraOn: false,
+        videos: {},
         error:
           error instanceof Error ? error.message : "Could not join voice channel",
       });
@@ -443,9 +515,11 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       deafened: false,
       mutedBeforeDeafen: null,
       // Nobody is talking in a room we are not in, and there is nothing left to
-      // turn the volume down on.
+      // turn the volume down on or to watch.
       speaking: {},
       audible: [],
+      cameraOn: false,
+      videos: {},
       // Whatever went wrong applied to the session that just ended
       error: null,
     });
@@ -510,6 +584,36 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
     set({ deafened: false, muted: false, mutedBeforeDeafen: null, error: null });
   },
 
+  toggleCamera: async () => {
+    const { room, cameraOn } = get();
+    if (!room || !livekitModule) return;
+    const { Track, VideoPresets } = livekitModule;
+    const next = !cameraOn;
+    try {
+      // 540p rather than the 720p default. Simulcast still sends the smaller
+      // layers for small tiles, and every subscriber's copy of the top layer
+      // goes through one VPS's uplink.
+      await room.localParticipant.setCameraEnabled(
+        next,
+        next ? { resolution: VideoPresets.h540.resolution } : undefined
+      );
+    } catch (error) {
+      // No camera, a refused permission prompt, or one already in use by
+      // another app. The call carries on either way.
+      console.warn("Could not change the camera state", error);
+      set({ cameraOn: false, error: "No camera available." });
+      return;
+    }
+    // Our own tile is set directly rather than from events: the first time,
+    // turning it on publishes, and no "unmuted" event follows a publish.
+    const publication = room.localParticipant.getTrackPublication(Track.Source.Camera);
+    setVideo(
+      room.localParticipant.identity,
+      next && publication?.track ? (publication.track as VideoTrack) : null
+    );
+    set({ cameraOn: next, error: null });
+  },
+
   setOutputVolume: (volume) => {
     const next = clampVolume(volume);
     set({ outputVolume: next });
@@ -538,6 +642,8 @@ export const useVoiceStore = create<VoiceStore>((set, get) => ({
       mutedBeforeDeafen: null,
       speaking: {},
       audible: [],
+      cameraOn: false,
+      videos: {},
       room: null,
       // `outputVolume` and `userVolumes` deliberately survive. They are a
       // property of these speakers in this room, not of the account that
