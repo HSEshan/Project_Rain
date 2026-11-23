@@ -27,6 +27,7 @@ import GroupDMCreateModal from "./messages/GroupDMCreateModal";
 import ProfileCard from "./profile/ProfileCard";
 import SessionWatch from "./auth/SessionWatch";
 import CallDock from "./voice/CallDock";
+import IncomingCallBanner from "./voice/IncomingCallBanner";
 
 function MainLayout() {
   return (
@@ -61,6 +62,8 @@ function MainLayout() {
         {/* Opened from anywhere a username appears, so it mounts with the
             other modals rather than inside any one view. */}
         <ProfileCard />
+        {/* A call ringing for you, over whatever page you are on. */}
+        <IncomingCallBanner />
 
         {/* Above the modals: it spotlights the app chrome, so it has to be
             able to dim anything that is already open. */}

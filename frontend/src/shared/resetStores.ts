@@ -4,6 +4,7 @@ import { useUserStore } from "./userStore";
 import { useGuildStore } from "../guild/guildStore";
 import { useFriendStore } from "../friends/friendStore";
 import { useVoiceStore } from "../voice/voiceStore";
+import { useIncomingCallStore } from "../voice/incomingCall";
 import { useGroupDMStore } from "../messages/groupDMStore";
 import { useTourStore } from "../tour/tourStore";
 
@@ -20,6 +21,7 @@ export function resetAllStores() {
   useGroupDMStore.getState().reset();
   // Also disconnects the SFU room — signing out must not leave a live mic
   useVoiceStore.getState().reset();
+  useIncomingCallStore.getState().reset();
   // A tour left running would spotlight the login screen
   useTourStore.getState().end();
 }
