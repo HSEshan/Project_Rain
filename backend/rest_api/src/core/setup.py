@@ -74,7 +74,8 @@ def create_app() -> FastAPI:
     app.include_router(master_router)
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        # An explicit list, never "*": see CORS_ALLOWED_ORIGINS in config.py
+        allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

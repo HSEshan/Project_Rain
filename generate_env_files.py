@@ -45,6 +45,7 @@ NUM_SHARDS=2
 LIVEKIT_API_KEY={livekit_api_key}
 LIVEKIT_API_SECRET={livekit_api_secret.strip()}
 LIVEKIT_PUBLIC_PATH=/livekit
+CORS_ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080
             """.strip()
         )
     with open("livekit.dev.env", "w") as f:

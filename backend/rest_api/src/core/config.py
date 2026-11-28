@@ -116,10 +116,31 @@ class SettingsFactory(BaseSettings):
     # readable 413 is what a person sees, not a proxy's.
     MAX_UPLOAD_BYTES: int = 8 * 1024 * 1024
 
+    # Browser origins allowed to make credentialed cross-origin requests,
+    # comma-separated. The app itself is same-origin (Caddy serves the page and
+    # /api together), so this only matters for a page on another origin, and
+    # it must never be `*`: with credentials allowed, Starlette echoes any
+    # Origin back, which let any *.eshanhs.dev page call /auth/refresh with the
+    # victim's cookie and read the new token. The default is production plus
+    # the dev Caddy edge, so neither needs an env line.
+    CORS_ALLOWED_ORIGINS: str = (
+        "https://voice.eshanhs.dev,http://localhost:8080,http://127.0.0.1:8080"
+    )
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
     )
+
+    @property
+    def cors_origins(self) -> list[str]:
+        origins = [
+            o.strip().rstrip("/")
+            for o in self.CORS_ALLOWED_ORIGINS.split(",")
+            if o.strip()
+        ]
+        # A wildcard with credentials is the bug this setting exists to fix
+        return [o for o in origins if o != "*"]
 
     @property
     def ASYNC_DB_URL(self):
