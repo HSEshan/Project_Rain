@@ -46,7 +46,17 @@ class ChannelService(BaseService):
         ):
             raise ForbiddenException("You cannot create a DM you are not part of")
 
+        other_id = (
+            channel_create.user_id2
+            if str(channel_create.user_id) == str(user.id)
+            else channel_create.user_id
+        )
+
         async with self.db.begin():
+            # Same rule as group DMs: a private conversation is only with a friend
+            await self._require_friend(
+                user.id, other_id, "You can only message your friends"
+            )
             new_channel = await ChannelRepository.create_dm_channel(
                 self.db, channel_create
             )
@@ -362,14 +372,19 @@ class ChannelService(BaseService):
             raise NotFoundException("Channel not found")
         return channel
 
-    async def _require_friend(self, actor_id: str, user_id: str) -> None:
+    async def _require_friend(
+        self,
+        actor_id: str,
+        user_id: str,
+        message: str = "You can only add your friends to a group",
+    ) -> None:
         if str(actor_id) == str(user_id):
             raise BadRequestException("You cannot add yourself")
         friendship = await FriendshipRepository.get_friendship_by_user_ids(
             self.db, actor_id, user_id
         )
         if not friendship:
-            raise ForbiddenException("You can only add your friends to a group")
+            raise ForbiddenException(message)
 
     async def _reassign_owner_if_needed(
         self, channel_id: str, remaining: list[str]
