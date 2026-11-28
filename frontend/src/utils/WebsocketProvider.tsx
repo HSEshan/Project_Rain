@@ -44,9 +44,10 @@ const MAX_BACKOFF_EXPONENT = 5;
  * used to settle into a 30 second poll against a server that would reject it
  * forever. Since Phase 15 there is a third possibility between "outage" and
  * "signed out" — the access token simply reached the end of its hour while the
- * socket was open, which the gateway only notices on the next connect. So a
- * 1008 is answered by renewing once and reconnecting with the new token, and
- * only a renewal that is itself refused ends the session.
+ * socket was open, and the gateway closes the socket with 1008 at the token's
+ * `exp` (`ws_gateway/src/api/router.py`). So a 1008 is answered by renewing
+ * once and reconnecting with the new token, and only a renewal that is itself
+ * refused ends the session.
  */
 const WS_POLICY_VIOLATION = 1008;
 

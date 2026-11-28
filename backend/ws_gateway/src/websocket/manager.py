@@ -9,6 +9,19 @@ from src.websocket.mapping import UserMapping
 
 logger = structlog.get_logger()
 
+# Lifetime of `user:{id}:grpc_endpoint`. Three reassert intervals (30 s each,
+# `core/setup.py`), so one missed reassert does not unroute anyone, and a
+# gateway that dies leaves the key behind for at most this long.
+#
+# Deliberately *not* the access token's expiry. It used to be, and the socket
+# outlives the token: after the hour the route lapsed, reassert stopped writing
+# it, and every user-addressed event was dropped while the socket stayed open,
+# `channels_changed` included. So a kicked user's gateway never learned to stop
+# fanning the guild's messages out to them. The token's expiry now bounds the
+# socket instead (`api/router.py` closes it with 1008 at `exp`), and the route
+# lives exactly as long as some socket for the user does.
+USER_ROUTE_TTL_SECONDS = 90
+
 
 class WebsocketManager:
     """Sockets held by this gateway instance.
@@ -31,9 +44,6 @@ class WebsocketManager:
         # and evicting one while a coroutine waits on it would hand the next
         # caller a second, unrelated lock.
         self._locks: dict[str, asyncio.Lock] = {}
-        # Token expiry per connected user, so a re-asserted user route gets the
-        # same TTL registration gave it
-        self._expires: dict[str, int] = {}
         self.grpc_endpoint: str | None = None
         self.redis_manager: RedisManager | None = None
         self.user_mapping: UserMapping = UserMapping()
@@ -67,10 +77,9 @@ class WebsocketManager:
     async def _register(self, current_user: CurrentUser, websocket: WebSocket):
         sockets = self.clients.setdefault(current_user.id, set())
         sockets.add(websocket)
-        self._expires[current_user.id] = current_user.exp
 
         await self.redis_manager.set_user_grpc_endpoint(
-            current_user.id, self.grpc_endpoint, _ttl_until(current_user.exp)
+            current_user.id, self.grpc_endpoint, USER_ROUTE_TTL_SECONDS
         )
 
         channel_ids = await self.redis_manager.get_user_channel_ids(current_user.id)
@@ -153,7 +162,6 @@ class WebsocketManager:
             return
 
         del self.clients[client_id]
-        self._expires.pop(client_id, None)
         empty_channel_ids = self.user_mapping.remove_user_from_channels(client_id)
         for channel_id in empty_channel_ids:
             await self.redis_manager.remove_grpc_endpoint_from_channel(
@@ -176,11 +184,9 @@ class WebsocketManager:
             async with self._lock(user_id):
                 if user_id not in self.clients:
                     continue
-                ttl = _ttl_until(self._expires.get(user_id, 0))
-                if ttl > 0:
-                    await self.redis_manager.set_user_grpc_endpoint(
-                        user_id, self.grpc_endpoint, ttl
-                    )
+                await self.redis_manager.set_user_grpc_endpoint(
+                    user_id, self.grpc_endpoint, USER_ROUTE_TTL_SECONDS
+                )
                 for channel_id in list(self.user_mapping.get_user_channel_ids(user_id)):
                     await self.redis_manager.add_grpc_endpoint_to_channel(
                         channel_id, self.grpc_endpoint
@@ -193,9 +199,10 @@ class WebsocketManager:
         return list(self.clients.get(client_id, ()))
 
 
-def _ttl_until(exp: int) -> int:
+def seconds_until(exp: int) -> float:
+    """How long until a token's `exp`; negative once it has passed."""
     expiration = datetime.fromtimestamp(exp, tz=timezone.utc)
-    return int((expiration - datetime.now(timezone.utc)).total_seconds())
+    return (expiration - datetime.now(timezone.utc)).total_seconds()
 
 
 websocket_manager = WebsocketManager()
