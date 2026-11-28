@@ -9,7 +9,7 @@ transaction has committed, so an SFU outage must not turn a removal that happene
 into a 500. It is logged, and the client's own departure still covers everyone who
 has not gone out of their way to avoid it.
 
-A removed participant's join token stays valid until it expires (`TOKEN_TTL`).
+A removed participant's join token stays valid until it expires (`LIVEKIT_TOKEN_TTL_SECONDS`).
 LiveKit does not revoke tokens, so a hostile client could connect again with the
 one it holds. It cannot get a new one: `join` checks membership.
 """

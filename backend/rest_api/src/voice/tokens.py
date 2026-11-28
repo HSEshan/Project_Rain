@@ -16,9 +16,12 @@ import json
 from datetime import datetime, timedelta, timezone
 
 from jose import jwt
+from src.core.config import settings
 
-# Long enough to cover a call, short enough that a leaked token expires
-TOKEN_TTL = timedelta(hours=6)
+
+def token_ttl() -> timedelta:
+    """The configured join-token lifetime (`LIVEKIT_TOKEN_TTL_SECONDS`, 6h by default)."""
+    return timedelta(seconds=settings.LIVEKIT_TOKEN_TTL_SECONDS)
 
 
 def create_join_token(
@@ -28,8 +31,10 @@ def create_join_token(
     room: str,
     user_id: str,
     username: str,
-    ttl: timedelta = TOKEN_TTL,
+    ttl: timedelta | None = None,
 ) -> str:
+    if ttl is None:
+        ttl = token_ttl()
     now = datetime.now(timezone.utc)
     claims = {
         "iss": api_key,

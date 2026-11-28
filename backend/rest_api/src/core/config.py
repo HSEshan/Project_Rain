@@ -90,6 +90,10 @@ class SettingsFactory(BaseSettings):
     LIVEKIT_PUBLIC_PATH: str = "/livekit"
     # How rest_api itself reaches it, inside the compose network
     LIVEKIT_INTERNAL_URL: str = "http://livekit:7880"
+    # Lifetime of a voice join token, in seconds. Long enough to cover a call,
+    # short enough that a leaked token expires; a participant removed from a
+    # room keeps a valid token until then (src/voice/room_service.py).
+    LIVEKIT_TOKEN_TTL_SECONDS: int = 6 * 60 * 60
 
     # Off only in the dev compose file: the e2e suite registers dozens of accounts
     # from one address. `tests/e2e/rate_limit_probe.py` runs with it on.
