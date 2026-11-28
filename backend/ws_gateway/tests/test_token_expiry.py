@@ -99,7 +99,7 @@ def user_expiring_in(seconds):
 
 
 async def sleep_past(exp):
-    await asyncio.sleep(max(exp - time.time(), 0) + 0.2)
+    await asyncio.sleep(max(exp - time.time(), 0) + 0.5)
 
 
 def consumer_delivers(redis, dispatcher, event):
