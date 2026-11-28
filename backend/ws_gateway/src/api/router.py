@@ -1,12 +1,14 @@
+import asyncio
+
 import orjson
 import structlog
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 from libs.rate_limit import hit
 from src.auth.service import get_current_user_ws
 from src.core.config import settings
 from src.event.event_queue import event_queue
 from src.message.ingest import MESSAGE_RATE, build_client_event, rate_limited_frame
-from src.websocket.manager import websocket_manager
+from src.websocket.manager import seconds_until, websocket_manager
 
 logger = structlog.get_logger()
 
@@ -20,7 +22,24 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
 
     try:
         while True:
-            data = await websocket.receive_text()
+            # The token is only checked on connect, so its `exp` is enforced
+            # here: a socket may not outlive the token that opened it. That is
+            # what bounds logout, a kick or a ban for a socket left open, and the
+            # client already answers 1008 by renewing and reconnecting
+            # (`frontend/src/utils/WebsocketProvider.tsx`).
+            try:
+                data = await asyncio.wait_for(
+                    websocket.receive_text(),
+                    timeout=max(seconds_until(current_user.exp), 0),
+                )
+            except TimeoutError:
+                logger.info(
+                    "Access token expired, closing socket", user=current_user.id
+                )
+                await websocket.close(
+                    code=status.WS_1008_POLICY_VIOLATION, reason="Token expired"
+                )
+                return
             try:
                 # Before parsing, so that junk is counted too: anything a client
                 # sends is meant to be a message. Keyed on the account, not the
@@ -45,4 +64,6 @@ async def websocket_endpoint(websocket: WebSocket, token: str = Query(...)):
                 logger.error(f"Error processing event: {e}")
 
     except WebSocketDisconnect:
+        pass
+    finally:
         await websocket_manager.remove_client(current_user.id, websocket)
