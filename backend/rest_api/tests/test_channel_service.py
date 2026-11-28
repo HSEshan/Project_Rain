@@ -96,25 +96,46 @@ def test_cannot_create_a_dm_between_two_other_people(side_effects):
     run(scenario())
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "POST /channels/dm opens a DM with any user id, friend or not. Every other "
-        "way into a private conversation (friend accept, group DM create/add) "
-        "requires friendship, and the websocket only checks channel membership, so "
-        "a stranger can message anyone whose id they know."
-    ),
-)
 def test_a_dm_needs_a_friendship(side_effects):
+    # The websocket only checks channel membership, so a DM with a stranger
+    # would let them message anyone whose id they know.
     async def scenario():
         async with world() as w:
             a, stranger = await w.user("a"), await w.user("stranger")
-            with pytest.raises(ForbiddenException):
+            for pair in (
+                DMChannelCreate(user_id=stranger.id, user_id2=a.id),
+                DMChannelCreate(user_id=a.id, user_id2=stranger.id),
+            ):
+                with pytest.raises(ForbiddenException):
+                    await w.call(ChannelService, "create_dm_channel", stranger, pair)
+            assert not await w.scalars(
+                select(Channel.id).where(Channel.type == ChannelType.DM)
+            )
+
+    run(scenario())
+
+
+def test_friends_can_open_a_dm(side_effects):
+    async def scenario():
+        async with world() as w:
+            a, b = await w.user("a"), await w.user("b")
+            await w.friends(a, b)
+            channel = await w.call(
+                ChannelService, "create_dm_channel", b, DMChannelCreate(user_id=a.id, user_id2=b.id)
+            )
+            assert channel.type == ChannelType.DM
+            assert await members_of(w, channel.id) == {a.id, b.id}
+
+    run(scenario())
+
+
+def test_cannot_open_a_dm_with_yourself(side_effects):
+    async def scenario():
+        async with world() as w:
+            a = await w.user("a")
+            with pytest.raises(BadRequestException):
                 await w.call(
-                    ChannelService,
-                    "create_dm_channel",
-                    stranger,
-                    DMChannelCreate(user_id=stranger.id, user_id2=a.id),
+                    ChannelService, "create_dm_channel", a, DMChannelCreate(user_id=a.id, user_id2=a.id)
                 )
 
     run(scenario())
