@@ -13,8 +13,10 @@ the page, and the one that is reachable expires in an hour.
 Same-origin does the rest of the work. Caddy serves the app and proxies
 `/api/*` to rest_api on one origin, so the cookie is a first-party cookie the
 browser attaches on its own — no `withCredentials`, and no reliance on the
-CORS configuration, which is `allow_origins=["*"]` and could not carry
-credentials anyway.
+CORS configuration. CORS is an explicit allowlist (`CORS_ALLOWED_ORIGINS`):
+it used to be `*` with credentials, which Starlette answers by echoing any
+Origin, so a sibling `*.eshanhs.dev` page (same-site, so Lax sends the cookie)
+could call /auth/refresh and read the new token.
 """
 
 from datetime import datetime
